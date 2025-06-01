@@ -8,6 +8,8 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     phoneNumber: { type: String },
     profilePicture: { type: String }, 
+    // Reference to the Business model
+    businessId: { type: mongoose.Schema.Types.ObjectId, ref: 'Business' },
   },
   {
     timestamps: true, 

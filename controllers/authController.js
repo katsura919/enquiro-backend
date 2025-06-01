@@ -37,16 +37,6 @@ exports.register = async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const user = new User({
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
-      phoneNumber,
-    });
-    await user.save();
-
     // Create business
     const business = new Business({
       name: businessName,
@@ -58,6 +48,17 @@ exports.register = async (req, res) => {
     });
     await business.save();
 
+    // Create user with businessId
+    const user = new User({
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
+      phoneNumber,
+      businessId: business._id,
+    });
+    await user.save();
+
     res.status(201).json({
       message: "Registration successful",
       user: {
@@ -66,6 +67,7 @@ exports.register = async (req, res) => {
         lastName,
         email,
         phoneNumber,
+        businessId: user.businessId,
       },
       business: {
         id: business._id,
@@ -112,6 +114,7 @@ exports.login = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        businessId: user.businessId,
       },
     });
   } catch (error) {
