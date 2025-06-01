@@ -26,6 +26,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.10.0",
     "openai": "^4.85.4",
-    "slugify": "^1.6.6"
+    "slugify": "^1.6.6",
+    "socket.io": "^4.8.1"
   }
 }

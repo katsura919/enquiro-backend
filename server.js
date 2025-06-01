@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require("cors");
+const http = require('http');
+const { initSocket } = require('./lib/socket');
 
 //Routes
 const askRoutes = require("./routes/askRoutes");
@@ -54,7 +56,10 @@ app.use("/user", userRoutes);
 app.use("/escalation", escalationRoutes);
 app.use("/business", businessRoutes);
 
+const server = http.createServer(app);
+initSocket(server, allowedOrigins);
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
