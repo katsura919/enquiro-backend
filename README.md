@@ -16,5 +16,23 @@ Make sure you have the following installed:
 ### 2. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/katsura919/enquiro-backend.git
+cd enquiro-backend
+
+```
+
+### 3. Install Dependencies
+
+This will install all packages listed in package.json.
+```bash
+npm install
+
+```
+
+### 4. Start the Server
+
+Start the server in development mode.
+```bash
+node server.js
+
+```
