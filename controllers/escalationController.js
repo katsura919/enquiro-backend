@@ -1,24 +1,66 @@
 const Escalation = require('../models/escalationModel');
 const Business = require('../models/businessModel');
 const Session = require('../models/sessionModel');
+const { sendEscalationEmail } = require('../services/emailService');
+
+// Helper function to generate a unique case number
+const generateUniqueCaseNumber = async () => {
+  while (true) {
+    // Generate a random 6-digit number
+    const caseNumber = String(Math.floor(100000 + Math.random() * 900000));
+    
+    // Check if this number already exists
+    const exists = await Escalation.findOne({ caseNumber });
+    
+    // If it doesn't exist, return it
+    if (!exists) {
+      return caseNumber;
+    }
+  }
+};
 
 // Create an escalation
 const createEscalation = async (req, res) => {
   try {
-    const { businessId, sessionId, caseNumber, customerName, customerEmail, customerPhone, concern, description } = req.body;
-    if (!businessId || !sessionId || !caseNumber || !customerName || !customerEmail || !concern) {
+    const { businessId, sessionId, customerName, customerEmail, customerPhone, concern, description } = req.body;
+    if (!businessId || !sessionId || !customerName || !customerEmail || !concern) {
       return res.status(400).json({ error: 'Missing required fields.' });
     }
-    const businessExists = await Business.findById(businessId);
-    if (!businessExists) {
+
+    // Fetch business details
+    const business = await Business.findById(businessId);
+    if (!business) {
       return res.status(404).json({ error: 'Business not found.' });
     }
+
     const sessionExists = await Session.findById(sessionId);
     if (!sessionExists) {
       return res.status(404).json({ error: 'Session not found.' });
     }
-    const escalation = new Escalation({ businessId, sessionId, caseNumber, customerName, customerEmail, customerPhone, concern, description });
+
+    // Generate unique case number
+    const caseNumber = await generateUniqueCaseNumber();
+
+    const escalation = new Escalation({ 
+      businessId, 
+      sessionId, 
+      caseNumber,
+      customerName, 
+      customerEmail, 
+      customerPhone, 
+      concern, 
+      description 
+    });
     await escalation.save();
+
+    // Send confirmation email to customer with business name
+    try {
+      await sendEscalationEmail(customerEmail, customerName, caseNumber, concern, business.name);
+    } catch (emailError) {
+      console.error('Failed to send escalation email:', emailError);
+      // Continue with the response even if email fails
+    }
+
     res.status(201).json(escalation);
   } catch (err) {
     console.error('Error creating escalation:', err);

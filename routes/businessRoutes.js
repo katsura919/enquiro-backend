@@ -8,6 +8,9 @@ router.post('/', businessController.createBusiness);
 // Get all businesses
 router.get('/', businessController.getBusinesses);
 
+// Get business by slug
+router.get('/slug/:slug', businessController.getBusinessBySlug);
+
 // Get a business by ID
 router.get('/:id', businessController.getBusinessById);
 

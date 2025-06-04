@@ -16,6 +16,21 @@ const createBusiness = async (req, res) => {
   }
 };
 
+// Get business by slug
+const getBusinessBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const business = await Business.findOne({ slug });
+    if (!business) {
+      return res.status(404).json({ error: 'Business not found.' });
+    }
+    res.json(business);
+  } catch (err) {
+    console.error('Error fetching business by slug:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
 // Get all businesses
 const getBusinesses = async (req, res) => {
   try {
@@ -71,4 +86,4 @@ const deleteBusiness = async (req, res) => {
   }
 };
 
-module.exports = { createBusiness, getBusinesses, getBusinessById, updateBusiness, deleteBusiness }; 
+module.exports = { createBusiness, getBusinesses, getBusinessById, updateBusiness, deleteBusiness, getBusinessBySlug }; 
