@@ -3,6 +3,8 @@ const User = require("../models/userModel");
 const Business = require("../models/businessModel");
 const slugify = require("slugify");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const sendConfirmationEmail = require('../services/confirmationEmail');
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
 exports.register = async (req, res) => {
@@ -48,6 +50,9 @@ exports.register = async (req, res) => {
     });
     await business.save();
 
+    // Generate confirmation token
+    const confirmationToken = crypto.randomBytes(32).toString('hex');
+
     // Create user with businessId
     const user = new User({
       firstName,
@@ -56,11 +61,15 @@ exports.register = async (req, res) => {
       password: hashedPassword,
       phoneNumber,
       businessId: business._id,
+      confirmationToken
     });
     await user.save();
 
+    // Send confirmation email
+    await sendConfirmationEmail(email, firstName, confirmationToken);
+
     res.status(201).json({
-      message: "Registration successful",
+      message: "Registration successful. Please check your email to confirm your account.",
       user: {
         id: user._id,
         firstName,
@@ -84,7 +93,6 @@ exports.register = async (req, res) => {
     res.status(500).json({ error: "An error occurred during registration" });
   }
 };
-
 
 
 // LOGIN
@@ -120,5 +128,29 @@ exports.login = async (req, res) => {
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: "An error occurred during login" });
+  }
+};
+
+
+// CONFIRM EMAIL
+exports.confirmEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    // Find user by confirmation token
+    const user = await User.findOne({ confirmationToken: token });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired token.' });
+    }
+
+    // Verify user
+    user.isVerified = true;
+    user.confirmationToken = null; // Clear the token
+    await user.save();
+
+    res.status(200).json({ message: 'Email confirmed. You can now log in.' });
+  } catch (err) {
+    console.error('Error confirming email:', err);
+    res.status(500).json({ error: 'Server error.' });
   }
 };

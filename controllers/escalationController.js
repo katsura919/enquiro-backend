@@ -1,7 +1,7 @@
 const Escalation = require('../models/escalationModel');
 const Business = require('../models/businessModel');
 const Session = require('../models/sessionModel');
-const { sendEscalationEmail } = require('../services/emailService');
+const { sendEscalationEmail } = require('../services/escalationEmail');
 
 // Helper function to generate a unique case number
 const generateUniqueCaseNumber = async () => {
