@@ -31,9 +31,13 @@ const escalationSchema = new mongoose.Schema(
     concern: {
       type: String,
       required: true,
-    },
-    description: {
+    },    description: {
       type: String,
+    },
+    status: {
+      type: String,
+      enum: ['escalated', 'resolved'],
+      default: 'escalated',
     },
   },
   {

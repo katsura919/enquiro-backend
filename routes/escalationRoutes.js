@@ -17,7 +17,10 @@ router.get('/:id', escalationController.getEscalationById);
 // Update an escalation by ID
 router.put('/:id', escalationController.updateEscalation);
 
+// Update escalation status by ID
+router.patch('/:id/status', escalationController.updateEscalationStatus);
+
 // Delete an escalation by ID
 router.delete('/:id', escalationController.deleteEscalation);
 
-module.exports = router; 
+module.exports = router;

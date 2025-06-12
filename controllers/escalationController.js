@@ -136,4 +136,32 @@ const deleteEscalation = async (req, res) => {
   }
 };
 
-module.exports = { createEscalation, getEscalationsByBusiness, getEscalationsBySession, getEscalationById, updateEscalation, deleteEscalation }; 
+// Update escalation status by ID
+const updateEscalationStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Validate status value
+    if (!status || !['escalated', 'resolved'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be "escalated" or "resolved".' });
+    }
+
+    const escalation = await Escalation.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true }
+    );
+
+    if (!escalation) {
+      return res.status(404).json({ error: 'Escalation not found.' });
+    }
+
+    res.json(escalation);
+  } catch (err) {
+    console.error('Error updating escalation status:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+module.exports = { createEscalation, getEscalationsByBusiness, getEscalationsBySession, getEscalationById, updateEscalation, deleteEscalation, updateEscalationStatus };
