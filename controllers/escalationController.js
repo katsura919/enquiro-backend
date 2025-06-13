@@ -68,12 +68,28 @@ const createEscalation = async (req, res) => {
   }
 };
 
-// Get all escalations for a specific business
+// Get all escalations for a specific business, with optional status filter and pagination
 const getEscalationsByBusiness = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const escalations = await Escalation.find({ businessId }).sort({ createdAt: -1 });
-    res.json(escalations);
+    const { status, page = 1, limit = 10 } = req.query;
+    const query = { businessId };
+    if (status) {
+      query.status = status;
+    }
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const escalations = await Escalation.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    const total = await Escalation.countDocuments(query);
+    res.json({
+      escalations,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+    });
   } catch (err) {
     console.error('Error fetching escalations by business:', err);
     res.status(500).json({ error: 'Server error.' });
