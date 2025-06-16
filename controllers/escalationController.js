@@ -54,12 +54,12 @@ const createEscalation = async (req, res) => {
     await escalation.save();
 
     // Send confirmation email to customer with business name
-    try {
-      await sendEscalationEmail(customerEmail, customerName, caseNumber, concern, business.name);
-    } catch (emailError) {
-      console.error('Failed to send escalation email:', emailError);
-      // Continue with the response even if email fails
-    }
+    // try {
+    //   await sendEscalationEmail(customerEmail, customerName, caseNumber, concern, business.name);
+    // } catch (emailError) {
+    //   console.error('Failed to send escalation email:', emailError);
+    //   // Continue with the response even if email fails
+    // }
 
     res.status(201).json(escalation);
   } catch (err) {
@@ -74,9 +74,12 @@ const getEscalationsByBusiness = async (req, res) => {
     const { businessId } = req.params;
     const { status, page = 1, limit = 10 } = req.query;
     const query = { businessId };
-    if (status) {
+    
+    // Only add status filter if status is provided and not 'all'
+    if (status && status !== 'all') {
       query.status = status;
     }
+    
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const escalations = await Escalation.find(query)
       .sort({ createdAt: -1 })
@@ -159,7 +162,7 @@ const updateEscalationStatus = async (req, res) => {
     const { status } = req.body;
 
     // Validate status value
-    if (!status || !['escalated', 'resolved'].includes(status)) {
+    if (!status || !['escalated', 'resolved', 'pending'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Must be "escalated" or "resolved".' });
     }
 
