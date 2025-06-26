@@ -22,6 +22,7 @@ app.use(express.json());
 const allowedOrigins = [
   "http://localhost:3000",
   "https://admin-codey.vercel.app",
+  "https://enquiro.vercel.app",
 ];
 
 // ✅ Allow CORS for frontend
