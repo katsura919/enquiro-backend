@@ -86,14 +86,14 @@ Respond with only "yes" or "no".
     if (needsEscalation) {
       // Step 2: Let Gemini generate a polite escalation message with an acknowledgment
       const escalationResponsePrompt = `
-The user asked: "${query}"
+        The user asked: "${query}"
 
-Write a short and polite acknowledgment about this query in one sentence.
-Then follow it with: "To escalate this concern, [click here](escalate://now)."
-Do NOT include business-specific information.
-Format it like:
-"[acknowledgement]. To escalate this concern, [click here](escalate://now)."
-`;
+        Write a short and polite acknowledgment about this query in one sentence.
+        Then follow it with: To escalate this concern, [click here](escalate://now).
+        Do NOT include business-specific information.
+        Format it like:
+        [acknowledgement]. To escalate this concern, [click here](escalate://now).
+        `;
 
       const escalationResponse = await model.generateContent(escalationResponsePrompt);
       responseText = escalationResponse.response.text().trim();
