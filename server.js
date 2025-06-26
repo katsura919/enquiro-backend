@@ -15,6 +15,7 @@ const sessionRoutes = require("./routes/sessionRoutes");
 const userRoutes = require("./routes/userRoutes");
 const escalationRoutes = require("./routes/escalationRoutes");
 const businessRoutes = require("./routes/businessRoutes");
+const activityRoutes = require("./routes/activityRoutes");
 
 const app = express();
 app.use(express.json());
@@ -56,6 +57,7 @@ app.use("/session", sessionRoutes);
 app.use("/user", userRoutes);
 app.use("/escalation", escalationRoutes);
 app.use("/business", businessRoutes);
+app.use("/activity", activityRoutes);
 
 const server = http.createServer(app);
 initSocket(server, allowedOrigins);

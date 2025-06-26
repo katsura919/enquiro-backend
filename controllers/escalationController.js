@@ -1,6 +1,7 @@
 const Escalation = require('../models/escalationModel');
 const Business = require('../models/businessModel');
 const Session = require('../models/sessionModel');
+const Activity = require('../models/activityModel');
 const { sendEscalationEmail } = require('../services/escalationEmail');
 
 // Helper function to generate a unique case number
@@ -163,18 +164,31 @@ const updateEscalationStatus = async (req, res) => {
 
     // Validate status value
     if (!status || !['escalated', 'resolved', 'pending'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be "escalated" or "resolved".' });
+      return res.status(400).json({ error: 'Invalid status. Must be "escalated", "resolved", or "pending".' });
     }
 
+    // Get the current escalation to check the previous status
+    const currentEscalation = await Escalation.findById(id);
+    if (!currentEscalation) {
+      return res.status(404).json({ error: 'Escalation not found.' });
+    }
+
+    const previousStatus = currentEscalation.status;
+
+    // Update the escalation status
     const escalation = await Escalation.findByIdAndUpdate(
       id,
       { status },
       { new: true, runValidators: true }
     );
 
-    if (!escalation) {
-      return res.status(404).json({ error: 'Escalation not found.' });
-    }
+    // Log the status change activity
+    const activity = new Activity({
+      escalationId: id,
+      action: 'Change Status',
+      details: `Set status from ${previousStatus.charAt(0).toUpperCase() + previousStatus.slice(1)} to ${status.charAt(0).toUpperCase() + status.slice(1)}.`
+    });
+    await activity.save();
 
     res.json(escalation);
   } catch (err) {
