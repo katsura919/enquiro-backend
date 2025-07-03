@@ -131,10 +131,10 @@ class GmailService {
   }
 
   /**
-   * Get full email details by message ID
+   * Get full email details by message ID with raw headers
    * @param {string} messageId - Gmail message ID
    */
-  async getEmail(messageId) {
+  async getEmailWithHeaders(messageId) {
     await this.ensureInitialized();
     
     if (!this.gmail) {
@@ -150,11 +150,13 @@ class GmailService {
 
       const message = response.data;
       
-      // Parse email headers
+      // Parse email headers into an object
       const headers = {};
-      message.payload.headers.forEach(header => {
-        headers[header.name.toLowerCase()] = header.value;
-      });
+      if (message.payload && message.payload.headers) {
+        message.payload.headers.forEach(header => {
+          headers[header.name.toLowerCase()] = header.value;
+        });
+      }
 
       // Extract email body
       const body = this.extractBody(message.payload);
@@ -168,10 +170,11 @@ class GmailService {
         to: headers.to || '',
         date: headers.date || '',
         body: body,
-        labels: message.labelIds || []
+        labels: message.labelIds || [],
+        headers: headers // Include all raw headers
       };
     } catch (error) {
-      console.error('Error getting email:', error.message);
+      console.error('Error getting email with headers:', error.message);
       throw error;
     }
   }
@@ -266,6 +269,119 @@ class GmailService {
       };
     } catch (error) {
       console.error('Error sending email:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Reply to an email in the same thread (RFC 2822 compliant)
+   * @param {Object} replyData - Reply email data
+   * @param {string} replyData.threadId - Thread ID to reply to
+   * @param {string} replyData.to - Recipient email
+   * @param {string} replyData.subject - Reply subject (should match original)
+   * @param {string} replyData.body - Reply body content
+   * @param {string} replyData.from - Display name for sender (optional)
+   * @param {string} replyData.originalMessageId - Original message ID being replied to
+   */
+  async replyToEmail(replyData) {
+    await this.ensureInitialized();
+    
+    if (!this.gmail) {
+      throw new Error('Gmail service not initialized');
+    }
+
+    const { threadId, to, subject, body, from, originalMessageId } = replyData;
+
+    try {
+      let messageId = null;
+      let references = null;
+      let originalSubject = subject;
+
+      // Get original message headers for proper RFC 2822 threading
+      if (originalMessageId) {
+        try {
+          const originalMessage = await this.getEmailWithHeaders(originalMessageId);
+          
+          // Get Message-ID from original message for In-Reply-To
+          messageId = originalMessage.headers['message-id'];
+          
+          // Get original subject to ensure exact match (important for threading)
+          originalSubject = originalMessage.headers['subject'] || subject;
+          
+          // Build References header according to RFC 2822
+          const existingReferences = originalMessage.headers['references'];
+          if (existingReferences && messageId) {
+            // Append current message-id to existing references
+            references = `${existingReferences} ${messageId}`;
+          } else if (messageId) {
+            // First reply - just use the original message-id
+            references = messageId;
+          }
+        } catch (error) {
+          console.log('Could not get original message headers for threading');
+        }
+      }
+
+      // Create reply email message with proper RFC 2822 headers
+      let email = '';
+      email += `To: ${to}\r\n`;
+      
+      // Handle the from field
+      if (from) {
+        if (from.includes('@')) {
+          const displayName = from.split('@')[0];
+          email += `From: "${displayName}" <janllatuna27@gmail.com>\r\n`;
+        } else {
+          email += `From: "${from}" <janllatuna27@gmail.com>\r\n`;
+        }
+      } else {
+        email += `From: janllatuna27@gmail.com\r\n`;
+      }
+      
+      // Subject MUST match exactly for proper threading (add Re: if not present)
+      let replySubject = originalSubject;
+      if (!replySubject.toLowerCase().startsWith('re:')) {
+        replySubject = `Re: ${originalSubject}`;
+      }
+      email += `Subject: ${replySubject}\r\n`;
+      
+      // Add RFC 2822 compliant threading headers
+      if (messageId) {
+        email += `In-Reply-To: ${messageId}\r\n`;
+      }
+      if (references) {
+        email += `References: ${references}\r\n`;
+      }
+      
+      email += `Content-Type: text/html; charset=utf-8\r\n`;
+      email += `\r\n${body}`;
+
+      // Encode email in base64url format
+      const encodedEmail = Buffer.from(email)
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      const response = await this.gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+          raw: encodedEmail,
+          threadId: threadId // This ensures the reply stays in the same thread
+        }
+      });
+
+      return {
+        success: true,
+        messageId: response.data.id,
+        threadId: response.data.threadId,
+        isReply: true,
+        inReplyTo: messageId,
+        references: references,
+        subject: replySubject
+      };
+    } catch (error) {
+      console.error('Error replying to email:', error.message);
       throw error;
     }
   }
@@ -369,6 +485,130 @@ class GmailService {
   }
 
   /**
+   * List email threads
+   * @param {Object} options - Query options
+   * @param {string} options.query - Gmail search query
+   * @param {number} options.maxResults - Maximum number of results (default: 10)
+   * @param {Array} options.labelIds - Label IDs to filter by
+   */
+  async listThreads(options = {}) {
+    await this.ensureInitialized();
+    
+    if (!this.gmail) {
+      throw new Error('Gmail service not initialized');
+    }
+
+    const {
+      query = '',
+      maxResults = 10,
+      labelIds = ['INBOX']
+    } = options;
+
+    try {
+      const response = await this.gmail.users.threads.list({
+        userId: 'me',
+        q: query,
+        maxResults,
+        labelIds
+      });
+
+      return response.data.threads || [];
+    } catch (error) {
+      console.error('Error listing threads:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific thread with all messages
+   * @param {string} threadId - Thread ID
+   */
+  async getThread(threadId) {
+    await this.ensureInitialized();
+    
+    if (!this.gmail) {
+      throw new Error('Gmail service not initialized');
+    }
+
+    try {
+      const response = await this.gmail.users.threads.get({
+        userId: 'me',
+        id: threadId,
+        format: 'full'
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error getting thread:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse a Gmail message to extract readable content
+   * @param {Object} message - Gmail message object
+   */
+  parseMessage(message) {
+    // Parse email headers
+    const headers = {};
+    if (message.payload && message.payload.headers) {
+      message.payload.headers.forEach(header => {
+        headers[header.name.toLowerCase()] = header.value;
+      });
+    }
+
+    // Extract email body
+    const body = this.extractBody(message.payload);
+
+    return {
+      id: message.id,
+      threadId: message.threadId,
+      snippet: message.snippet,
+      subject: headers.subject || 'No Subject',
+      from: headers.from || 'Unknown Sender',
+      to: headers.to || '',
+      date: headers.date || '',
+      body: body,
+      labels: message.labelIds || [],
+      internalDate: message.internalDate
+    };
+  }
+
+  /**
+   * Get all messages in a thread with parsed content
+   * @param {string} threadId - Thread ID
+   */
+  async getThreadMessages(threadId) {
+    await this.ensureInitialized();
+    
+    if (!this.gmail) {
+      throw new Error('Gmail service not initialized');
+    }
+
+    try {
+      const thread = await this.getThread(threadId);
+      const messages = [];
+
+      if (thread.messages) {
+        for (const message of thread.messages) {
+          const parsedMessage = this.parseMessage(message);
+          messages.push(parsedMessage);
+        }
+      }
+
+      return {
+        threadId: thread.id,
+        historyId: thread.historyId,
+        messageCount: messages.length,
+        messages: messages
+      };
+    } catch (error) {
+      console.error('Error getting thread messages:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Ensure Gmail service is initialized and ready
    */
   async ensureInitialized() {
@@ -377,6 +617,17 @@ class GmailService {
       await this.initialize();
     }
     return this.isInitialized;
+  }
+
+  /**
+   * Get full email details by message ID (original method)
+   * @param {string} messageId - Gmail message ID
+   */
+  async getEmail(messageId) {
+    const emailWithHeaders = await this.getEmailWithHeaders(messageId);
+    // Return without the headers object for backward compatibility
+    const { headers, ...email } = emailWithHeaders;
+    return email;
   }
 }
 
