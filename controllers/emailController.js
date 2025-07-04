@@ -1,4 +1,5 @@
 const gmailService = require('../services/gmailService');
+const Escalation = require('../models/escalationModel');
 
 class EmailController {
   /**
@@ -87,7 +88,7 @@ class EmailController {
    */
   async sendEmail(req, res) {
     try {
-      const { to, subject, body, from } = req.body;
+      const { to, subject, body, from, escalationId } = req.body;
       
       if (!to || !subject || !body) {
         return res.status(400).json({
@@ -103,12 +104,25 @@ class EmailController {
         from: from || 'janllatuna27@gmail.com' // Use provided name or default
       });
 
+      // If escalationId is provided, store the threadId in the escalation
+      if (escalationId && result.threadId) {
+        try {
+          await Escalation.findByIdAndUpdate(
+            escalationId,
+            { emailThreadId: result.threadId },
+            { new: true }
+          );
+        } catch (escalationError) {
+          console.error('Failed to update escalation with threadId:', escalationError);
+          // Continue with response even if escalation update fails
+        }
+      }
+
       res.status(200).json({
         success: true,
         message: 'Email sent successfully',
         result: result,
-        actualSender: 'janllatuna27@gmail.com', // Always this email
-        displayFrom: from || 'janllatuna27@gmail.com'
+        actualSender: 'janllatuna27@gmail.com'
       });
     } catch (error) {
       res.status(500).json({

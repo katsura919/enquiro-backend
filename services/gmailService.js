@@ -235,13 +235,13 @@ class GmailService {
         if (from.includes('@')) {
           // It's an email address - use as display name with actual sender
           const displayName = from.split('@')[0];
-          email += `From: "${displayName}" <noreply@gmail.com>\r\n`;
+          email += `From: "${displayName}" <janllatuna27@gmail.com>\r\n`;
         } else {
           // It's a display name
-          email += `From: "${from}" <noreply@gmail.com>\r\n`;
+          email += `From: "${from}" <janllatuna27@gmail.com>\r\n`;
         }
       } else {
-        email += `From: noreply@gmail.com\r\n`;
+        email += `From: janllatuna27@gmail.com\r\n`;
       }
       
       email += `Subject: ${subject}\r\n`;
