@@ -1,6 +1,7 @@
 const { google } = require('googleapis');
 const fs = require('fs').promises;
 const path = require('path');
+const { simpleParser } = require('mailparser');
 
 class GmailService {
   constructor() {
@@ -545,11 +546,126 @@ class GmailService {
   }
 
   /**
-   * Parse a Gmail message to extract readable content
+   * Parse a Gmail message using mailparser for better content extraction
    * @param {Object} message - Gmail message object
    */
-  parseMessage(message) {
-    // Parse email headers
+  async parseMessage(message) {
+    try {
+      // Parse email headers the old way for basic info
+      const headers = {};
+      if (message.payload && message.payload.headers) {
+        message.payload.headers.forEach(header => {
+          headers[header.name.toLowerCase()] = header.value;
+        });
+      }
+
+      // Get the raw email data for mailparser
+      let rawEmail = '';
+      
+      if (message.raw) {
+        // If raw data is available, use it
+        rawEmail = Buffer.from(message.raw, 'base64').toString('utf-8');
+      } else {
+        // Otherwise, try to reconstruct from payload
+        rawEmail = this.reconstructRawEmail(message);
+      }
+
+      let parsedEmail = null;
+      let mainContent = '';
+      let quotedContent = null;
+      let isHTML = false;
+
+      if (rawEmail) {
+        try {
+          // Use mailparser to parse the email
+          parsedEmail = await simpleParser(rawEmail);
+          
+          // Extract main content and quoted content
+          if (parsedEmail.html) {
+            isHTML = true;
+            const htmlContent = parsedEmail.html;
+            
+            // Split content at Gmail quote indicators
+            const quoteSeparators = [
+              /<div class="gmail_quote"[^>]*>/i,
+              /<blockquote[^>]*class="[^"]*gmail_quote[^"]*"[^>]*>/i,
+              /On .{1,100} wrote:/i
+            ];
+            
+            let splitContent = htmlContent;
+            for (const separator of quoteSeparators) {
+              const match = htmlContent.match(separator);
+              if (match) {
+                const splitIndex = match.index;
+                mainContent = htmlContent.substring(0, splitIndex).trim();
+                quotedContent = htmlContent.substring(splitIndex).trim();
+                break;
+              }
+            }
+            
+            if (!quotedContent) {
+              mainContent = htmlContent;
+            }
+          } else if (parsedEmail.text) {
+            mainContent = parsedEmail.text;
+            
+            // Split text content at common reply indicators
+            const textSeparators = [
+              /\r?\n\r?\nOn .+ wrote:\r?\n/,
+              /\r?\n\r?\n> /,
+              /\r?\n\r?\n----- Original Message -----/,
+              /\r?\n\r?\nFrom: /
+            ];
+            
+            for (const separator of textSeparators) {
+              const match = mainContent.match(separator);
+              if (match && match.index !== undefined) {
+                quotedContent = mainContent.substring(match.index).trim();
+                mainContent = mainContent.substring(0, match.index).trim();
+                break;
+              }
+            }
+          }
+        } catch (parseError) {
+          console.warn('Mailparser failed, falling back to basic extraction:', parseError.message);
+          // Fallback to old method
+          mainContent = this.extractBody(message.payload);
+        }
+      } else {
+        // Fallback to old method if no raw data
+        mainContent = this.extractBody(message.payload);
+      }
+
+      return {
+        id: message.id,
+        threadId: message.threadId,
+        snippet: message.snippet,
+        subject: (parsedEmail?.subject || headers.subject || 'No Subject'),
+        from: (parsedEmail?.from?.text || headers.from || 'Unknown Sender'),
+        to: (parsedEmail?.to?.text || headers.to || ''),
+        date: (parsedEmail?.date?.toISOString() || headers.date || ''),
+        body: mainContent,
+        quotedContent: quotedContent,
+        isHTML: isHTML,
+        labels: message.labelIds || [],
+        internalDate: message.internalDate,
+        attachments: parsedEmail?.attachments?.map(att => ({
+          name: att.filename,
+          size: att.size,
+          contentType: att.contentType
+        })) || []
+      };
+    } catch (error) {
+      console.error('Error parsing message:', error.message);
+      // Fallback to basic parsing
+      return this.parseMessageBasic(message);
+    }
+  }
+
+  /**
+   * Fallback basic message parsing (original method)
+   */
+  parseMessageBasic(message) {
     const headers = {};
     if (message.payload && message.payload.headers) {
       message.payload.headers.forEach(header => {
@@ -557,7 +673,6 @@ class GmailService {
       });
     }
 
-    // Extract email body
     const body = this.extractBody(message.payload);
 
     return {
@@ -569,9 +684,45 @@ class GmailService {
       to: headers.to || '',
       date: headers.date || '',
       body: body,
+      quotedContent: null,
+      isHTML: /<[a-z][\s\S]*>/i.test(body),
       labels: message.labelIds || [],
-      internalDate: message.internalDate
+      internalDate: message.internalDate,
+      attachments: []
     };
+  }
+
+  /**
+   * Reconstruct raw email from Gmail payload (for mailparser)
+   */
+  reconstructRawEmail(message) {
+    try {
+      const headers = {};
+      if (message.payload && message.payload.headers) {
+        message.payload.headers.forEach(header => {
+          headers[header.name] = header.value;
+        });
+      }
+
+      // Build basic email structure
+      let rawEmail = '';
+      
+      // Add headers
+      Object.entries(headers).forEach(([name, value]) => {
+        rawEmail += `${name}: ${value}\r\n`;
+      });
+      
+      rawEmail += '\r\n'; // Empty line between headers and body
+      
+      // Add body
+      const body = this.extractBody(message.payload);
+      rawEmail += body;
+      
+      return rawEmail;
+    } catch (error) {
+      console.warn('Failed to reconstruct raw email:', error.message);
+      return '';
+    }
   }
 
   /**
@@ -591,7 +742,7 @@ class GmailService {
 
       if (thread.messages) {
         for (const message of thread.messages) {
-          const parsedMessage = this.parseMessage(message);
+          const parsedMessage = await this.parseMessage(message);
           messages.push(parsedMessage);
         }
       }
