@@ -48,10 +48,10 @@ mongoose.connect(`mongodb+srv://katsuragik919:gUxW6bdC56s2bgQE@csbackend.frzm8.m
   .then(() => console.log('MongoDB connected successfully'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Use Routes
-app.use("/", (req, res) => {
-  res.status(200).json({ message: "Welcome to Enquiro API" });
-});
+// // Use Routes
+// app.use("/", (req, res) => {
+//   res.status(200).json({ message: "Welcome to Enquiro API" });
+// });
 app.use("/auth", authRoutes);
 app.use("/knowledge", knowledgeRoutes);
 app.use("/ask", askRoutes);
