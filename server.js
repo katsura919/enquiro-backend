@@ -16,6 +16,7 @@ const userRoutes = require("./routes/userRoutes");
 const escalationRoutes = require("./routes/escalationRoutes");
 const businessRoutes = require("./routes/businessRoutes");
 const activityRoutes = require("./routes/activityRoutes");
+const notesRoutes = require("./routes/notesRoutes");
 const emailRoutes = require("./routes/emailRoutes");
 
 const app = express();
@@ -62,6 +63,7 @@ app.use("/user", userRoutes);
 app.use("/escalation", escalationRoutes);
 app.use("/business", businessRoutes);
 app.use("/activity", activityRoutes);
+app.use("/notes", notesRoutes);
 app.use("/api/email", emailRoutes);
 
 const server = http.createServer(app);
