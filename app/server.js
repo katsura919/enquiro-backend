@@ -5,19 +5,8 @@ const cors = require("cors");
 const http = require('http');
 const { initSocket } = require('./lib/socket');
 
-//Routes
-const askRoutes = require("./routes/askRoutes");
-const authRoutes = require("./routes/authRoutes");
-const chatRoutes = require("./routes/chatRoutes");
-const knowledgeRoutes = require("./routes/knowledgeRoutes");
-const categoryRoutes = require("./routes/categoryRoutes");
-const sessionRoutes = require("./routes/sessionRoutes");
-const userRoutes = require("./routes/userRoutes");
-const escalationRoutes = require("./routes/escalationRoutes");
-const businessRoutes = require("./routes/businessRoutes");
-const activityRoutes = require("./routes/activityRoutes");
-const notesRoutes = require("./routes/notesRoutes");
-const emailRoutes = require("./routes/emailRoutes");
+// All routes united under /api
+const api = require("./index");
 
 const app = express();
 app.use(express.json());
@@ -49,22 +38,8 @@ mongoose.connect(`mongodb+srv://katsuragik919:gUxW6bdC56s2bgQE@csbackend.frzm8.m
   .then(() => console.log('MongoDB connected successfully'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// // Use Routes
-// app.use("/", (req, res) => {
-//   res.status(200).json({ message: "Welcome to Enquiro API" });
-// });
-app.use("/auth", authRoutes);
-app.use("/knowledge", knowledgeRoutes);
-app.use("/ask", askRoutes);
-app.use("/chat", chatRoutes);
-app.use("/category", categoryRoutes);
-app.use("/session", sessionRoutes);
-app.use("/user", userRoutes);
-app.use("/escalation", escalationRoutes);
-app.use("/business", businessRoutes);
-app.use("/activity", activityRoutes);
-app.use("/notes", notesRoutes);
-app.use("/api/email", emailRoutes);
+// Unite all routes under /api
+app.use('/api', api);
 
 const server = http.createServer(app);
 initSocket(server, allowedOrigins);

@@ -48,41 +48,6 @@ class GmailService {
   }
 
   /**
-   * List emails from inbox or specific label
-   * @param {Object} options - Query options
-   * @param {string} options.query - Gmail search query
-   * @param {number} options.maxResults - Maximum number of results (default: 10)
-   * @param {string} options.labelIds - Label IDs to filter by
-   */
-  async listEmails(options = {}) {
-    await this.ensureInitialized();
-    
-    if (!this.gmail) {
-      throw new Error('Gmail service not initialized');
-    }
-
-    const {
-      query = '',
-      maxResults = 10,
-      labelIds = ['INBOX']
-    } = options;
-
-    try {
-      const response = await this.gmail.users.messages.list({
-        userId: 'me',
-        q: query,
-        maxResults,
-        labelIds
-      });
-
-      return response.data.messages || [];
-    } catch (error) {
-      console.error('Error listing emails:', error.message);
-      throw error;
-    }
-  }
-
-  /**
    * Get full email details by message ID with raw headers
    * @param {string} messageId - Gmail message ID
    */
@@ -366,53 +331,6 @@ class GmailService {
   }
 
   /**
-   * Mark email as unread
-   * @param {string} messageId - Gmail message ID
-   */
-  async markAsUnread(messageId) {
-    await this.ensureInitialized();
-    
-    if (!this.gmail) {
-      throw new Error('Gmail service not initialized');
-    }
-
-    try {
-      await this.gmail.users.messages.modify({
-        userId: 'me',
-        id: messageId,
-        requestBody: {
-          addLabelIds: ['UNREAD']
-        }
-      });
-
-      return { success: true };
-    } catch (error) {
-      console.error('Error marking email as unread:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Search emails by query
-   * @param {string} searchQuery - Gmail search query (e.g., 'from:example@gmail.com', 'subject:important')
-   * @param {number} maxResults - Maximum results to return
-   */
-  async searchEmails(searchQuery, maxResults = 20) {
-    const messageList = await this.listEmails({
-      query: searchQuery,
-      maxResults
-    });
-
-    const emails = [];
-    for (const message of messageList) {
-      const email = await this.getEmail(message.id);
-      emails.push(email);
-    }
-
-    return emails;
-  }
-
-  /**
    * List email threads
    * @param {Object} options - Query options
    * @param {string} options.query - Gmail search query
@@ -492,6 +410,35 @@ class GmailService {
     // Return without the headers object for backward compatibility
     const { headers, ...email } = emailWithHeaders;
     return email;
+  }
+
+  /**
+   * Get attachment data
+   * @param {string} messageId - Gmail message ID
+   * @param {string} attachmentId - Attachment ID
+   */
+  async getAttachment(messageId, attachmentId) {
+    await this.ensureInitialized();
+    
+    if (!this.gmail) {
+      throw new Error('Gmail service not initialized');
+    }
+
+    try {
+      const response = await this.gmail.users.messages.attachments.get({
+        userId: 'me',
+        messageId: messageId,
+        id: attachmentId
+      });
+
+      return {
+        data: response.data.data,
+        size: response.data.size
+      };
+    } catch (error) {
+      console.error('Error getting attachment:', error.message);
+      throw error;
+    }
   }
 }
 
