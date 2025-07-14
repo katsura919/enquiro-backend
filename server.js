@@ -3,10 +3,10 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require("cors");
 const http = require('http');
-const { initSocket } = require('./lib/socket');
+const { initSocket } = require('./app/lib/socket');
 
 // All routes united under /api
-const api = require("./index");
+const api = require("./app/index");
 
 const app = express();
 app.use(express.json());
