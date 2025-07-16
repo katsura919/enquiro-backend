@@ -16,10 +16,14 @@ const sessionRoutes = require('./api/session/routes');
 const notesRoutes = require('./api/notes/routes');
 const emailRoutes = require('./api/email/routes');
 const categoryRoutes = require('./api/category/routes');
+const faqRoutes = require('./api/faq/routes');
+const policyRoutes = require('./api/policy/routes');
+const serviceRoutes = require('./api/service/routes');
+const productRoutes = require('./api/product/routes');
+
 
 const api = express.Router();
 
-// Django-like API routes
 api.use('/auth', authRoutes);
 api.use('/user', userRoutes);
 api.use('/business', businessRoutes);
@@ -32,5 +36,10 @@ api.use('/session', sessionRoutes);
 api.use('/notes', notesRoutes);
 api.use('/email', emailRoutes);
 api.use('/category', categoryRoutes);
+api.use('/faq', faqRoutes);
+api.use('/policy', policyRoutes);
+api.use('/service', serviceRoutes);
+api.use('/product', productRoutes);
+
 
 module.exports = api;
