@@ -66,60 +66,6 @@ const fetchBusinessDataBySlug = async (slug, query = null) => {
   const searchResults = await searchMultipleCollections(business._id, query, collections);
   console.log('Search results:', searchResults.length, 'items found');
 
-  // If no search results, fall back to getting some general data
-  if (searchResults.length === 0) {
-    console.log('No search results, falling back to general data fetch');
-    const [faqs, policies, products, services] = await Promise.all([
-      FAQ.find({ businessId: business._id })
-        .sort({ createdAt: -1 })
-        .select('question answer category')
-        .limit(2)
-        .lean(),
-      
-      Policy.find({ businessId: business._id })
-        .sort({ createdAt: -1 })
-        .select('title content type')
-        .limit(2)
-        .lean(),
-      
-      Product.find({ businessId: business._id })
-        .sort({ createdAt: -1 })
-        .select('name description price category')
-        .limit(2)
-        .lean(),
-      
-      Service.find({ businessId: business._id })
-        .sort({ createdAt: -1 })
-        .select('name description price duration')
-        .limit(2)
-        .lean()
-    ]);
-
-    const fallbackData = [
-      ...faqs.map(item => ({ ...item, type: 'faq', relevanceScore: 0.1 })),
-      ...policies.map(item => ({ ...item, type: 'policy', relevanceScore: 0.1 })),
-      ...products.map(item => ({ ...item, type: 'product', relevanceScore: 0.1 })),
-      ...services.map(item => ({ ...item, type: 'service', relevanceScore: 0.1 }))
-    ];
-
-    console.log('Fallback data:', fallbackData.length, 'items found');
-
-    // Separate fallback results by type
-    const fallbackFaqs = fallbackData.filter(item => item.type === 'faq');
-    const fallbackPolicies = fallbackData.filter(item => item.type === 'policy');
-    const fallbackProducts = fallbackData.filter(item => item.type === 'product');
-    const fallbackServices = fallbackData.filter(item => item.type === 'service');
-
-    return { 
-      business, 
-      allData: fallbackData, 
-      faqs: fallbackFaqs, 
-      policies: fallbackPolicies, 
-      products: fallbackProducts, 
-      services: fallbackServices 
-    };
-  }
-
   // Separate results by type for backward compatibility
   const faqs = searchResults.filter(item => item.type === 'faq');
   const policies = searchResults.filter(item => item.type === 'policy');
