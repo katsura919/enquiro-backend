@@ -18,7 +18,6 @@ const createService = async (req, res) => {
     await service.save();
     res.status(201).json({ 
       success: true, 
-      message: 'Service created successfully', 
       service 
     });
   } catch (error) {
