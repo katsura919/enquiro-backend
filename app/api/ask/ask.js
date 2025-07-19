@@ -1,54 +1,14 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Chat = require("../../models/chatModel");
 const Session = require("../../models/sessionModel");
-const Knowledge = require("../../models/knowledgeModel");
 const Business = require("../../models/businessModel");
 
+// Import the business data service
+const { 
+  fetchBusinessDataBySlug
+} = require("../../services/businessDataService");
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// Fetch business and its knowledge base by slug with optimization
-const fetchKnowledgeBySlug = async (slug, query = null) => {
-  const business = await Business.findOne({ slug });
-  if (!business) return { knowledge: null, business: null };
-
-  let knowledge = await Knowledge.find({ businessId: business._id })
-    .populate('categoryId', 'name')
-    .sort({ createdAt: -1 })
-    .select('title content categoryId')
-    .lean(); // Use lean() for better performance
-
-  // Filter knowledge by relevance if query provided
-  if (query && knowledge.length > 0) {
-    knowledge = filterKnowledgeByRelevance(query, knowledge);
-  }
-
-  // Limit to top 8 most relevant items to prevent prompt bloat
-  knowledge = knowledge.slice(0, 8);
-
-  return { knowledge, business };
-};
-
-// Simple keyword-based relevance filtering
-const filterKnowledgeByRelevance = (query, knowledge) => {
-  const queryLower = query.toLowerCase();
-  const queryWords = queryLower.split(' ').filter(word => word.length > 2);
-  
-  return knowledge
-    .map(k => {
-      const titleWords = k.title.toLowerCase();
-      const contentWords = k.content.toLowerCase();
-      
-      let relevanceScore = 0;
-      queryWords.forEach(word => {
-        if (titleWords.includes(word)) relevanceScore += 3; // Title matches worth more
-        if (contentWords.includes(word)) relevanceScore += 1;
-      });
-      
-      return { ...k, relevanceScore };
-    })
-    .filter(k => k.relevanceScore > 0)
-    .sort((a, b) => b.relevanceScore - a.relevanceScore);
-};
 
 // Get recent conversation history
 const getRecentHistory = async (sessionId, limit = 4) => {
@@ -72,9 +32,40 @@ You are ${businessName}'s friendly and helpful AI assistant. Act like a real, kn
 
 ${!isEscalation && knowledge?.length > 0 ? 
 `**Available Business Information:**
-${knowledge.map((k, i) => 
-  `${i + 1}. **${k.title}** ${k.categoryId?.name ? `(${k.categoryId.name})` : ''}: ${k.content}`
-).join('\n')}
+${knowledge.map((k, i) => {
+  // Handle different data types with appropriate fields
+  let title, content, category = '';
+  
+  if (k.type === 'faq') {
+    title = k.question || 'FAQ';
+    content = k.answer || '';
+    category = k.category ? ` (FAQ - ${k.category})` : ' (FAQ)';
+  } else if (k.type === 'product') {
+    title = k.name || 'Product';
+    content = k.description || '';
+    category = k.category ? ` (Product - ${k.category})` : ' (Product)';
+    if (k.price) content += ` - Price: ${k.price}`;
+  } else if (k.type === 'service') {
+    title = k.name || 'Service';
+    content = k.description || '';
+    category = ' (Service)';
+    if (k.price) content += ` - Price: ${k.price}`;
+    if (k.duration) content += ` - Duration: ${k.duration}`;
+  } else if (k.type === 'policy') {
+    title = k.title || 'Policy';
+    content = k.content || '';
+    category = k.type ? ` (Policy - ${k.type})` : ' (Policy)';
+  } else {
+    // Fallback for other types
+    title = k.title || k.name || 'Information';
+    content = k.content || k.description || '';
+    if (k.categoryId?.name) {
+      category = ` (${k.categoryId.name})`;
+    }
+  }
+  
+  return `${i + 1}. **${title}**${category}: ${content}`;
+}).join('\n')}
 
 ` : ''}
 
@@ -188,11 +179,14 @@ const askAI = async (req, res) => {
       return res.status(400).json({ error: "Query too long. Please keep it under 1000 characters." });
     }
 
-    // Get business knowledge with relevance filtering
-    const { knowledge, business } = await fetchKnowledgeBySlug(slug, query);
+    // Get additional business data from other tables
+    const { allData: businessData, business } = await fetchBusinessDataBySlug(slug, query);
     if (!business) {
       return res.status(404).json({ error: "Business not found" });
     }
+
+    // Use business data for AI responses
+    const combinedData = businessData || [];
 
     // Handle or create session
     let session;
@@ -242,14 +236,14 @@ Keep it natural and friendly, like a real person would respond.
       responseText = escalationResponse.response.text().trim();
       escalationGenerated = true;
     } else {
-      // Check if we have relevant knowledge first
-      const hasRelevantKnowledge = knowledge && knowledge.length > 0;
+      // Check if we have relevant data from any source (knowledge + business data)
+      const hasRelevantData = combinedData && combinedData.length > 0;
       
-      if (hasRelevantKnowledge) {
-        // Generate normal AI response with knowledge
+      if (hasRelevantData) {
+        // Generate normal AI response with all available data
         const chatPrompt = constructPrompt({ 
           query: query.trim(), 
-          knowledge, 
+          knowledge: combinedData, // Use combined data instead of just knowledge
           history: recentHistory, 
           isEscalation: false,
           businessName: business.name
@@ -257,8 +251,11 @@ Keep it natural and friendly, like a real person would respond.
         
         const result = await model.generateContent(chatPrompt);
         responseText = result.response.text();
+        
+        // Store the prompt for debugging
+        req.debugPrompt = chatPrompt;
       } else {
-        // Generate natural response when no relevant knowledge
+        // Generate natural response when no relevant data
         responseText = await generateNaturalResponse(query, business.name, model, false);
         
         // Only suggest contact if it seems like important information they need
@@ -284,11 +281,11 @@ Keep it natural and friendly, like a real person would respond.
       query: query.trim(),
       response: responseText,
       escalationGenerated,
-      knowledgeItemsUsed: knowledge?.length || 0,
+      knowledgeItemsUsed: combinedData?.length || 0,
       responseTime: Date.now() - req.startTime // If you add timing middleware
     });
 
-    // Enhanced response
+    // Enhanced response with testing data
     res.json({
       answer: responseText,
       chatId: chat._id,
@@ -296,8 +293,15 @@ Keep it natural and friendly, like a real person would respond.
       escalationSuggested: escalationGenerated,
       context: {
         businessName: business.name,
-        knowledgeItemsAvailable: knowledge?.length || 0,
+        dataItemsAvailable: combinedData?.length || 0,
         conversationLength: recentHistory.length
+      },
+      // Testing data - remove in production
+      testingData: {
+        dataGivenToAI: combinedData || [], // Only the actual data used in the AI prompt
+        dataCount: combinedData?.length || 0,
+        dataTypes: combinedData?.map(item => item.type) || [],
+        hasRelevantData: combinedData && combinedData.length > 0
       }
     });
 

@@ -19,7 +19,6 @@ const createProduct = async (req, res) => {
     await product.save();
     res.status(201).json({ 
       success: true, 
-      message: 'Product created successfully', 
       product 
     });
   } catch (error) {
@@ -136,7 +135,6 @@ const updateProduct = async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'Product updated successfully', 
       product 
     });
   } catch (error) {

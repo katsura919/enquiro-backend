@@ -17,7 +17,6 @@ const createPolicy = async (req, res) => {
     await policy.save();
     res.status(201).json({ 
       success: true, 
-      message: 'Policy created successfully', 
       policy 
     });
   } catch (error) {
@@ -101,7 +100,6 @@ const updatePolicy = async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'Policy updated successfully', 
       policy 
     });
   } catch (error) {

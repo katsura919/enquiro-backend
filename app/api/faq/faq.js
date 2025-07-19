@@ -17,7 +17,6 @@ const createFAQ = async (req, res) => {
     await faq.save();
     res.status(201).json({ 
       success: true, 
-      message: 'FAQ created successfully', 
       faq 
     });
   } catch (error) {
