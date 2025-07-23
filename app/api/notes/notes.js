@@ -1,4 +1,5 @@
 const Notes = require('../../models/notesModel');
+const logActivity = require('../../utils/logActivity');
 const Escalation = require('../../models/escalationModel');
 const mongoose = require('mongoose');
 
@@ -22,6 +23,13 @@ const createNote = async (req, res) => {
     });
 
     await note.save();
+
+    // Log activity
+    await logActivity({
+      escalationId,
+      action: 'Note Created',
+      details: `Note added: ${content}`
+    });
 
     res.status(201).json({
       success: true,
@@ -132,6 +140,13 @@ const updateNote = async (req, res) => {
       });
     }
 
+    // Log activity
+    await logActivity({
+      escalationId: note.escalationId,
+      action: 'Note Updated',
+      details: `Note updated: ${content}`
+    });
+
     res.status(200).json({
       success: true,
       message: 'Note updated successfully',
@@ -161,6 +176,13 @@ const deleteNote = async (req, res) => {
         message: 'Note not found'
       });
     }
+
+    // Log activity
+    await logActivity({
+      escalationId: note.escalationId,
+      action: 'Note Deleted',
+      details: `Note deleted.`
+    });
 
     res.status(200).json({
       success: true,
