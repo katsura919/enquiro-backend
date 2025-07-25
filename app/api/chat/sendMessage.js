@@ -1,6 +1,8 @@
 const Chat = require('../../models/chatModel');
 const Agent = require('../../models/agentModel');
 
+const { getChatRoomBySession } = require('../../utils/chatRoomUtil');
+
 // Unified controller for sending a message
 const sendMessage = async (req, res) => {
   try {
@@ -21,7 +23,33 @@ const sendMessage = async (req, res) => {
       isGoodResponse: null
     });
     await chat.save();
+
+    // Emit the message to the chat room for real-time updates
+    const io = req.app.get('io');
+    const room = await getChatRoomBySession(sessionId);
+    if (io) {
+      io.to(room).emit('new_message', {
+        chatId: chat._id,
+        message: chat.message,
+        senderType: chat.senderType,
+        agentId: chat.agentId,
+        sessionId: chat.sessionId,
+        businessId: chat.businessId,
+        createdAt: chat.createdAt
+      });
+    }
+
     res.status(201).json(chat);
+
+    console.log(`Message sent to room ${room}:`, {
+      chatId: chat._id,
+      message: chat.message,
+      senderType: chat.senderType,
+      agentId: chat.agentId,
+      sessionId: chat.sessionId,
+      businessId: chat.businessId
+    });
+    
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
