@@ -1,5 +1,6 @@
 const express = require("express");
 const chatController = require("./chat");
+const sendMessageController = require('./sendMessage');
 
 const router = express.Router();
 
@@ -22,5 +23,12 @@ router.get('/:id', chatController.getChatById);
 
 // Update a chat by ID
 router.put('/:id', chatController.updateChat);
+
+// Send a message (agent)
+router.post('/send-message', sendMessageController.sendMessage);
+
+
+// Get all messages for a session
+router.get('/session/:sessionId/messages', sendMessageController.getSessionMessages);
 
 module.exports = router;

@@ -6,6 +6,7 @@ const corsMiddleware = require('./app/lib/cors');
 
 // All routes united under /api
 const api = require("./app/index");
+const setupSocket = require('./app/lib/socket');
 
 const app = express();
 app.use(express.json());
@@ -21,6 +22,8 @@ const startServer = async () => {
     app.use('/api', api);
 
     const server = http.createServer(app);
+    // Initialize Socket.IO
+    setupSocket(server);
 
     const PORT = process.env.PORT || 5000;
     server.listen(PORT, () => {
