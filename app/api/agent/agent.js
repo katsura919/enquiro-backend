@@ -1,9 +1,38 @@
+const jwt = require('jsonwebtoken');
+
+// Fetch agent info using JWT token
+const getAgentInfo = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided.' });
+    }
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+    const agent = await Agent.findById(decoded.id).select('-password');
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    res.json(agent);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 const Agent = require('../../models/agentModel');
 
 // Create a new agent
 const createAgent = async (req, res) => {
   try {
-    const agent = new Agent(req.body);
+    const { password, ...rest } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required.' });
+    }
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const agent = new Agent({ ...rest, password: hashedPassword });
     await agent.save();
     res.status(201).json(agent);
   } catch (err) {
@@ -61,5 +90,6 @@ module.exports = {
   getAgents,
   getAgentById,
   updateAgent,
-  deleteAgent
+  deleteAgent,
+  getAgentInfo
 };

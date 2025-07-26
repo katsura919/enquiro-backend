@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const agentController = require('./agent');
 
+
+// Get Agent info using token
+router.post('/info', agentController.getAgentInfo);
 // Create agent
 router.post('/', agentController.createAgent);
 // Get all agents (optionally by business)
