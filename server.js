@@ -4,14 +4,12 @@ const http = require('http');
 const connectDB = require('./app/lib/db');
 const corsMiddleware = require('./app/lib/cors');
 
-// All routes united under /api
+
 const api = require("./app/index");
 const setupSocket = require('./app/lib/socket');
 
 const app = express();
 app.use(express.json());
-
-// CORS 
 app.use(corsMiddleware);
 
 // Connect to MongoDB first then start server
@@ -22,10 +20,8 @@ const startServer = async () => {
     app.use('/api', api);
 
     const server = http.createServer(app);
-    // Initialize Socket.IO
     const io = setupSocket(server);
     
-    // Make io available in all routes
     app.set('io', io);
 
     const PORT = process.env.PORT || 5000;
@@ -38,5 +34,4 @@ const startServer = async () => {
   }
 };
 
-// Start the application
 startServer();

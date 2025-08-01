@@ -6,7 +6,7 @@ const notesSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Escalation',
       required: true,
-      index: true // Index for faster queries
+      index: true 
     },
     content: {
       type: String,
@@ -15,7 +15,7 @@ const notesSchema = new mongoose.Schema(
     }
   },
   {
-    timestamps: true, // Adds createdAt and updatedAt
+    timestamps: true, 
   }
 );
 

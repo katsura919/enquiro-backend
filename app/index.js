@@ -1,9 +1,5 @@
-// Main API routes index
-// Django-like structure - centralized route imports
-
 const express = require('express');
 
-// Django-like API routes
 const userRoutes = require('./api/user/routes');
 const authRoutes = require('./api/auth/routes');
 const businessRoutes = require('./api/business/routes');
@@ -41,7 +37,7 @@ api.use('/faq', faqRoutes);
 api.use('/policy', policyRoutes);
 api.use('/service', serviceRoutes);
 api.use('/product', productRoutes);
-api.use('/agent', agentRoutes);  // New agent routes
-api.use('/queue', queueRoutes);  // New queue routes
+api.use('/agent', agentRoutes);  
+api.use('/queue', queueRoutes);  
 
 module.exports = api;
