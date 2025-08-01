@@ -17,13 +17,17 @@ const getRecentHistory = async (sessionId, limit = 4) => {
   const recentChats = await Chat.find({ sessionId })
     .sort({ createdAt: -1 })
     .limit(limit)
-    .select('query response')
+    .select('message senderType')
     .lean();
-    
-  return recentChats.reverse().map(chat => [
-    { role: "user", content: chat.query },
-    { role: "assistant", content: chat.response }
-  ]).flat();
+
+  // Map senderType to role for prompt context
+  return recentChats.reverse().map(chat => {
+    let role;
+    if (chat.senderType === "customer") role = "user";
+    else if (chat.senderType === "ai") role = "assistant";
+    else role = chat.senderType; // fallback for agent, etc.
+    return { role, content: chat.message };
+  });
 };
 
 // Enhanced prompt construction with better structure and natural responses
@@ -278,17 +282,27 @@ Keep it natural and friendly, like a real person would respond.
     const chat = await Chat.create({
       businessId: business._id,
       sessionId: session._id,
-      query: query.trim(),
-      response: responseText,
-      escalationGenerated,
-      knowledgeItemsUsed: combinedData?.length || 0,
-      responseTime: Date.now() - req.startTime // If you add timing middleware
+      message: query.trim(),
+      senderType: "customer",
+      agentId: null,
+      isGoodResponse: null
+    });
+
+    // Save AI response as a separate chat message
+    const aiChat = await Chat.create({
+      businessId: business._id,
+      sessionId: session._id,
+      message: responseText,
+      senderType: "ai",
+      agentId: null,
+      isGoodResponse: null
     });
 
     // Enhanced response with testing data
     res.json({
       answer: responseText,
-      chatId: chat._id,
+      customerChatId: chat._id,
+      aiChatId: aiChat._id,
       sessionId: session._id,
       escalationSuggested: escalationGenerated,
       context: {

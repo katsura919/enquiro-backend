@@ -8,7 +8,7 @@ const userRoutes = require('./api/user/routes');
 const authRoutes = require('./api/auth/routes');
 const businessRoutes = require('./api/business/routes');
 const activityRoutes = require('./api/activity/routes');
-const askRoutes = require('./api/ask/routes');
+const askRoutes = require('./api/aiChat/routes');
 const chatRoutes = require('./api/chat/routes');
 const knowledgeRoutes = require('./api/knowledge/routes');
 const escalationRoutes = require('./api/escalation/routes');
@@ -20,7 +20,8 @@ const faqRoutes = require('./api/faq/routes');
 const policyRoutes = require('./api/policy/routes');
 const serviceRoutes = require('./api/service/routes');
 const productRoutes = require('./api/product/routes');
-
+const agentRoutes = require('./api/agent/routes');  
+const queueRoutes = require('./api/queue');
 
 const api = express.Router();
 
@@ -40,6 +41,7 @@ api.use('/faq', faqRoutes);
 api.use('/policy', policyRoutes);
 api.use('/service', serviceRoutes);
 api.use('/product', productRoutes);
-
+api.use('/agent', agentRoutes);  // New agent routes
+api.use('/queue', queueRoutes);  // New queue routes
 
 module.exports = api;

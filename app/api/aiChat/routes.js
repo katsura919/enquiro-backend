@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const askController = require('./ask');
+const askController = require('./aiChat');
 
 // Route definition
 router.post('/chat/:slug', askController.askAI);

@@ -47,7 +47,20 @@ const createEscalation = async (req, res) => {
     });
     await escalation.save();
 
-    res.status(201).json(escalation);
+    // Return plain object with _id included
+    res.status(201).json({
+      _id: escalation._id,
+      businessId: escalation.businessId,
+      sessionId: escalation.sessionId,
+      caseNumber: escalation.caseNumber,
+      customerName: escalation.customerName,
+      customerEmail: escalation.customerEmail,
+      customerPhone: escalation.customerPhone,
+      concern: escalation.concern,
+      description: escalation.description,
+      createdAt: escalation.createdAt,
+      updatedAt: escalation.updatedAt
+    });
   } catch (err) {
     console.error('Error creating escalation:', err);
     res.status(500).json({ error: 'Server error.' });

@@ -12,13 +12,20 @@ const chatSchema = new mongoose.Schema(
       ref: 'Session',
       required: true,
     },
-    query: {
+    message: {
       type: String,
       required: true,
     },
-    response: {
+    senderType: {
       type: String,
+      enum: ['agent', 'ai', 'customer'],
       required: true,
+      default: 'ai',
+    },
+    agentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Agent',
+      default: null,
     },
     isGoodResponse: {
       type: Boolean,

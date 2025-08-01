@@ -2,6 +2,7 @@ const cors = require("cors");
 
 const allowedOrigins = [
   "http://localhost:3000",
+  "http://localhost:3001",
   "https://admin-codey.vercel.app",
   "https://enquiro.vercel.app",
 ];
