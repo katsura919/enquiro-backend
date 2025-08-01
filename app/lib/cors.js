@@ -5,6 +5,7 @@ const allowedOrigins = [
   "http://localhost:3001",
   "https://admin-codey.vercel.app",
   "https://enquiro.vercel.app",
+  "https://agent-enquiro.vercel.app"
 ];
 
 const corsOptions = {
