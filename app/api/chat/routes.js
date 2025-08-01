@@ -1,6 +1,7 @@
 const express = require("express");
 const chatController = require("./chat");
 const sendMessageController = require('./sendMessage');
+const queueController = require('./queue');
 
 const router = express.Router();
 
@@ -27,8 +28,12 @@ router.put('/:id', chatController.updateChat);
 // Send a message (agent)
 router.post('/send-message', sendMessageController.sendMessage);
 
-
 // Get all messages for a session
 router.get('/session/:sessionId/messages', sendMessageController.getSessionMessages);
+
+// Queue management routes
+router.get('/queue/:businessId', queueController.getQueue);
+router.delete('/queue/:queueId', queueController.removeFromQueue);
+router.post('/queue/cleanup', queueController.cleanupQueue);
 
 module.exports = router;

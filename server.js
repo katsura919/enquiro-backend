@@ -23,7 +23,10 @@ const startServer = async () => {
 
     const server = http.createServer(app);
     // Initialize Socket.IO
-    setupSocket(server);
+    const io = setupSocket(server);
+    
+    // Make io available in all routes
+    app.set('io', io);
 
     const PORT = process.env.PORT || 5000;
     server.listen(PORT, () => {

@@ -21,6 +21,7 @@ const policyRoutes = require('./api/policy/routes');
 const serviceRoutes = require('./api/service/routes');
 const productRoutes = require('./api/product/routes');
 const agentRoutes = require('./api/agent/routes');  
+const queueRoutes = require('./api/queue');
 
 const api = express.Router();
 
@@ -41,5 +42,6 @@ api.use('/policy', policyRoutes);
 api.use('/service', serviceRoutes);
 api.use('/product', productRoutes);
 api.use('/agent', agentRoutes);  // New agent routes
+api.use('/queue', queueRoutes);  // New queue routes
 
 module.exports = api;
