@@ -5,7 +5,7 @@ const agentStatusSchema = new mongoose.Schema({
   businessId: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', required: true },
   status: { 
     type: String, 
-    enum: ['offline', 'online', 'available', 'busy'], 
+    enum: ['offline', 'online', 'available', 'away', 'in-chat'], 
     default: 'offline' 
   },
   lastActive: { type: Date, default: Date.now }

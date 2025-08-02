@@ -19,6 +19,7 @@ function setupSocket(server) {
     let joinedEscalationId = null;
     let joinedAgentId = null;
     let joinedBusinessId = null;
+    let isCustomerConnection = false; // Track if this is a customer connection
 
     console.log(`[SOCKET] New connection: ${socket.id}`);
 
@@ -50,7 +51,7 @@ function setupSocket(server) {
       }
     });
 
-    // Agent updates status (online -> available -> busy -> offline)
+    // Agent updates status (online -> available -> away -> offline)
     socket.on('update_status', async ({ businessId, agentId, status }) => {
       try {
         await AgentStatus.findOneAndUpdate(
@@ -77,6 +78,7 @@ function setupSocket(server) {
         socket.join(`queue_${businessId}`);
         joinedBusinessId = businessId;
         joinedEscalationId = escalationId;
+        isCustomerConnection = true; // Mark this as a customer connection
 
         console.log(`[SOCKET] Customer requesting chat: businessId=${businessId}, escalationId=${escalationId}, socketId=${socket.id}`);
 
@@ -91,7 +93,12 @@ function setupSocket(server) {
         console.log(`[SOCKET] Customer added to queue:`, queueEntry);
 
         // Try to assign an available agent immediately
-        await assignAgent(businessId, escalationId);
+        const immediateAssignment = await assignAgent(businessId, escalationId);
+        if (immediateAssignment) {
+          console.log(`[SOCKET] Customer ${escalationId} was immediately assigned to an agent`);
+        } else {
+          console.log(`[SOCKET] Customer ${escalationId} is waiting in queue - no available agents`);
+        }
       } catch (error) {
         console.error('[SOCKET] Error in request_chat:', error);
         socket.emit('chat_error', { message: 'Failed to join chat queue' });
@@ -102,6 +109,7 @@ function setupSocket(server) {
     socket.on('join_escalation', ({ escalationId }) => {
       socket.join(escalationId);
       joinedEscalationId = escalationId;
+      isCustomerConnection = true; // Mark this as a customer connection
       console.log(`[SOCKET] Customer joined escalation room: escalationId=${escalationId}, socketId=${socket.id}`);
     });
 
@@ -126,11 +134,15 @@ function setupSocket(server) {
           status: 'waiting' 
         }).sort({ requestedAt: 1 });
 
+        console.log(`[SOCKET] Checking for waiting customers in business ${businessId}: found ${waitingCustomers.length} waiting`);
+
         for (const customer of waitingCustomers) {
           const assigned = await assignAgent(businessId, customer.escalationId.toString());
           if (assigned) {
             console.log(`[SOCKET] Auto-assigned customer ${customer.escalationId} to agent`);
             break; // Only assign one customer per agent becoming available
+          } else {
+            console.log(`[SOCKET] Could not assign customer ${customer.escalationId} - no available agents`);
           }
         }
       } catch (error) {
@@ -172,11 +184,17 @@ function setupSocket(server) {
           agentId: availableAgentStatus.agentId,
         });
 
-        // Mark agent as busy
+        // Mark agent as in-chat (engaged with customer)
         await AgentStatus.findOneAndUpdate(
           { agentId: availableAgentStatus.agentId, businessId },
-          { status: 'busy' }
+          { status: 'in-chat' }
         );
+
+        // Broadcast status change to other agents in the business
+        io.to(`status_${businessId}`).emit('agent_status_update', { 
+          agentId: availableAgentStatus.agentId, 
+          status: 'in-chat' 
+        });
 
         const room = `chat_${escalationId}`;
         const agentId = availableAgentStatus.agentId;
@@ -258,48 +276,51 @@ function setupSocket(server) {
       }
     }
 
-    // End chat
-    socket.on('end_chat', async ({ escalationId, agentId, businessId }) => {
-      try {
-        const room = `chat_${escalationId}`;
-        
-        // Update queue status
-        await ChatQueue.findOneAndUpdate(
-          { escalationId, agentId },
-          { status: 'completed' }
-        );
-
-        // Set agent back to available
-        await AgentStatus.findOneAndUpdate(
-          { agentId, businessId },
-          { status: 'available' }
-        );
-
-        // Notify room participants
-        io.to(room).emit('chat_ended', {
-          escalationId,
-          agentId,
-          endedAt: Date.now(),
-          message: 'Chat session has ended'
-        });
-
-        // Make everyone leave the room
-        io.in(room).socketsLeave(room);
-
-        console.log(`[SOCKET] Chat ended: escalationId=${escalationId}, agentId=${agentId}`);
-
-        // Check for waiting customers
-        await checkAndAssignWaitingCustomers(businessId);
-
-      } catch (error) {
-        console.error('[SOCKET] Error ending chat:', error);
-      }
-    });
-
     // Disconnect handling
     socket.on('disconnect', async () => {
       try {
         if (joinedAgentId && joinedBusinessId) {
+          // Check if agent was in-chat before disconnecting
+          const agentStatus = await AgentStatus.findOne({
+            agentId: joinedAgentId, 
+            businessId: joinedBusinessId 
+          });
+
+          // If agent was in-chat, we need to handle the active chat
+          if (agentStatus && agentStatus.status === 'in-chat') {
+            // Find active chat for this agent
+            const activeChat = await ChatQueue.findOne({
+              businessId: joinedBusinessId,
+              agentId: joinedAgentId,
+              status: 'assigned'
+            });
+
+            if (activeChat) {
+              console.log(`[SOCKET] Agent ${joinedAgentId} disconnected during active chat ${activeChat.escalationId}`);
+              
+              // Notify customer about agent disconnection
+              const room = `chat_${activeChat.escalationId}`;
+              io.to(room).emit('agent_disconnected_during_chat', {
+                agentId: joinedAgentId,
+                escalationId: activeChat.escalationId,
+                message: 'Agent has disconnected. You will be reassigned to another agent.',
+                disconnectedAt: Date.now()
+              });
+
+              // Reset chat queue entry back to waiting for reassignment
+              await ChatQueue.findByIdAndUpdate(activeChat._id, {
+                status: 'waiting',
+                agentId: null
+              });
+
+              // Try to reassign to another available agent
+              setTimeout(async () => {
+                await assignAgent(joinedBusinessId, activeChat.escalationId.toString());
+              }, 1000); // Small delay to ensure everything is cleaned up
+            }
+          }
+
+          // Set agent status to offline
           await AgentStatus.findOneAndUpdate(
             { agentId: joinedAgentId, businessId: joinedBusinessId },
             { status: 'offline', lastActive: new Date() }
@@ -317,14 +338,25 @@ function setupSocket(server) {
           console.log(`[SOCKET] Agent disconnected: agentId=${joinedAgentId}, businessId=${joinedBusinessId}`);
         }
 
-        if (joinedEscalationId) {
-          // Remove from queue if still waiting
-          await ChatQueue.findOneAndUpdate(
-            { escalationId: joinedEscalationId, status: 'waiting' },
-            { status: 'completed' }
-          );
-
-          console.log(`[SOCKET] Customer disconnected: escalationId=${joinedEscalationId}`);
+        if (joinedEscalationId && isCustomerConnection) {
+          // Only remove from queue if this is actually a customer socket disconnecting
+          // and the queue entry is still waiting (not assigned to an agent)
+          const queueEntry = await ChatQueue.findOne({ 
+            escalationId: joinedEscalationId, 
+            status: 'waiting' 
+          });
+          
+          if (queueEntry) {
+            await ChatQueue.findOneAndUpdate(
+              { escalationId: joinedEscalationId, status: 'waiting' },
+              { status: 'completed' }
+            );
+            console.log(`[SOCKET] Customer disconnected from waiting queue: escalationId=${joinedEscalationId}`);
+          } else {
+            console.log(`[SOCKET] Customer disconnected but was not in waiting queue: escalationId=${joinedEscalationId}`);
+          }
+        } else if (joinedEscalationId && !isCustomerConnection) {
+          console.log(`[SOCKET] Agent disconnected with escalationId ${joinedEscalationId} but not clearing customer queue`);
         }
       } catch (error) {
         console.error('[SOCKET] Error on disconnect:', error);
@@ -382,11 +414,17 @@ function setupSocket(server) {
       try {
         const room = `chat_${escalationId}`;
         
-        // Update agent status back to available
+        // Update agent status back to away (was busy before chat)
         await AgentStatus.findOneAndUpdate(
           { agentId, businessId: joinedBusinessId },
-          { status: 'available' }
+          { status: 'away' }
         );
+
+        // Broadcast status change to other agents in the business
+        io.to(`status_${joinedBusinessId}`).emit('agent_status_update', { 
+          agentId, 
+          status: 'away' 
+        });
 
         // Update queue entry to completed
         await ChatQueue.findOneAndUpdate(

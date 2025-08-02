@@ -21,11 +21,6 @@ module.exports = function(io, socket) {
     io.to(room).emit('message_read', { messageId, readerId });
   });
 
-  // Listen for chat end event
-  socket.on('end_chat', ({ room, senderId }) => {
-    io.to(room).emit('chat_ended', { senderId, room, timestamp: Date.now() });
-  });
-
   // Listen for agent/user leaving the room
   socket.on('leave_room', ({ room, senderId }) => {
     socket.leave(room);
