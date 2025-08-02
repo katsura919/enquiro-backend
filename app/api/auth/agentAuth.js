@@ -15,13 +15,21 @@ const loginAgent = async (req, res) => {
 
     const agent = await Agent.findOne({ email });
     if (!agent) {
-      return res.status(401).json({ error: 'Invalid credentials.' });
+      return res.status(401).json(
+        { 
+          success: false,
+          message: 'Invalid email or password.',
+        });
     }
 
     // If password is not stored in the model, this will need to be updated
     const isMatch = await bcrypt.compare(password, agent.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid credentials.' });
+      return res.status(401).json(
+       {
+        success: false,
+        message: 'Invalid password.'
+       });
     }
 
     const payload = {
