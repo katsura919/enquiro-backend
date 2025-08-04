@@ -177,13 +177,6 @@ const searchProducts = async (req, res) => {
     const { businessId } = req.params;
     const { query } = req.query;
 
-    if (!query || query.trim().length < 2) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Query must be at least 2 characters' 
-      });
-    }
-
     const products = await Product.find({
       businessId,
       isActive: true,

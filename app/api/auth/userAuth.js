@@ -5,7 +5,7 @@ const slugify = require("slugify");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const sendConfirmationEmail = require('../../services/confirmationEmail');
-const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const register = async (req, res) => {
   try {
@@ -109,8 +109,7 @@ const login = async (req, res) => {
     // Generate token (include user ID)
     const token = jwt.sign(
       { userId: user._id },
-      JWT_SECRET,
-      { expiresIn: "7d" } // optional
+      JWT_SECRET
     );
 
     res.json({

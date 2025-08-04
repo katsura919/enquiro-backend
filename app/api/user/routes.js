@@ -1,20 +1,43 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('./user');
+const authMiddleware  = require('../../middleware/authMiddleware');
+const {createUserValidation, updateUserValidation} = require('../../utils/validation/userValidation');
+const handleValidationErrors = require('../../utils/validation/validationErrorHandler');
+
 
 // Create a user
-router.post('/', userController.createUser);
+router.post('/', 
+    authMiddleware,
+    createUserValidation,
+    handleValidationErrors, 
+    userController.createUser
+);
 
 // Get all users
-router.get('/', userController.getUsers);
+router.get('/', 
+    authMiddleware,
+    userController.getUsers
+);
 
 // Get a user by ID
-router.get('/:id', userController.getUserById);
+router.get('/:id', 
+    authMiddleware,
+    userController.getUserById
+);
 
 // Update a user by ID
-router.put('/:id', userController.updateUser);
+router.put('/:id', 
+    authMiddleware,
+    updateUserValidation,
+    handleValidationErrors, 
+    userController.updateUser
+);
 
 // Delete a user by ID
-router.delete('/:id', userController.deleteUser);
+router.delete('/:id', 
+    authMiddleware,
+    userController.deleteUser
+);
 
 module.exports = router;
