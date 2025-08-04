@@ -1,26 +1,70 @@
 const express = require('express');
 const router = express.Router();
 const escalationController = require('./escalation');
+const authMiddleware = require('../../middleware/authMiddleware');
+const {
+  createEscalationValidation,
+  updateEscalationValidation,
+} = require('../../utils/validation/escalationValidation');
+const handleValidationErrors = require('../../utils/validation/validationErrorHandler');
+const { body, param } = require('express-validator');
+
 
 // Create an escalation
-router.post('/', escalationController.createEscalation);
+router.post('/', 
+    createEscalationValidation, 
+    handleValidationErrors, 
+    escalationController.createEscalation
+);
 
 // Get all escalations for a business
-router.get('/business/:businessId', escalationController.getEscalationsByBusiness);
+router.get('/business/:businessId', 
+    authMiddleware,
+    escalationController.getEscalationsByBusiness
+);
 
 // Get all escalations for a session
-router.get('/session/:sessionId', escalationController.getEscalationsBySession);
+router.get('/session/:sessionId', 
+    authMiddleware,
+    escalationController.getEscalationsBySession
+);
 
 // Get an escalation by ID
-router.get('/:id', escalationController.getEscalationById);
+router.get('/:id', 
+    authMiddleware,
+    escalationController.getEscalationById
+);
 
 // Update an escalation by ID
-router.put('/:id', escalationController.updateEscalation);
+router.patch('/:id', 
+    authMiddleware,
+    updateEscalationValidation, 
+    handleValidationErrors, 
+    escalationController.updateEscalation
+);
 
 // Update escalation status by ID
-router.patch('/:id/status', escalationController.updateEscalationStatus);
+
+router.patch('/:id/status', 
+    authMiddleware,
+    escalationController.updateEscalationStatus
+);
+
+// Update case owner by escalation ID
+router.patch(
+  '/:id/case-owner',
+  authMiddleware,
+  [
+    body('caseOwner').isMongoId().withMessage('Valid agent id is required')
+  ],
+  handleValidationErrors,
+  escalationController.updateCaseOwner
+);
 
 // Delete an escalation by ID
-router.delete('/:id', escalationController.deleteEscalation);
+router.delete('/:id', 
+    authMiddleware,
+    escalationController.deleteEscalation
+);
 
 module.exports = router;

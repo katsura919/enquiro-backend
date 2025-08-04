@@ -1,3 +1,4 @@
+
 const jwt = require('jsonwebtoken');
 
 // Fetch agent info using JWT token
@@ -43,7 +44,7 @@ const createAgent = async (req, res) => {
 // Get all agents (optionally by business)
 const getAgents = async (req, res) => {
   try {
-    const filter = {};
+    const filter = { deletedAt: null };
     if (req.query.businessId) filter.businessId = req.query.businessId;
     const agents = await Agent.find(filter);
     res.json(agents);
@@ -55,7 +56,7 @@ const getAgents = async (req, res) => {
 // Get agent by ID
 const getAgentById = async (req, res) => {
   try {
-    const agent = await Agent.findById(req.params.id);
+    const agent = await Agent.findOne({ _id: req.params.id, deletedAt: null });
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
     res.json(agent);
   } catch (err) {
@@ -66,7 +67,11 @@ const getAgentById = async (req, res) => {
 // Update agent
 const updateAgent = async (req, res) => {
   try {
-    const agent = await Agent.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const agent = await Agent.findOneAndUpdate(
+      { _id: req.params.id, deletedAt: null },
+      req.body,
+      { new: true }
+    );
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
     res.json(agent);
   } catch (err) {
@@ -74,12 +79,43 @@ const updateAgent = async (req, res) => {
   }
 };
 
-// Delete agent
+// Soft delete agent
 const deleteAgent = async (req, res) => {
   try {
-    const agent = await Agent.findByIdAndDelete(req.params.id);
+    const agent = await Agent.findOne({ _id: req.params.id, deletedAt: null });
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
-    res.json({ message: 'Agent deleted' });
+    
+    await agent.softDelete();
+    res.json({ message: 'Agent deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Restore deleted agent
+const restoreAgent = async (req, res) => {
+  try {
+    const agent = await Agent.findOne({ _id: req.params.id, deletedAt: { $ne: null } });
+    if (!agent) return res.status(404).json({ error: 'Deleted agent not found' });
+    
+    await agent.restore();
+    res.json({ message: 'Agent restored successfully', agent });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Search agents by name (for case owner selection)
+const searchAgents = async (req, res) => {
+  try {
+    const { search, businessId } = req.query;
+    const filter = { deletedAt: null };
+    if (businessId) filter.businessId = businessId;
+    if (search) {
+      filter.name = { $regex: search, $options: 'i' };
+    }
+    const agents = await Agent.find(filter).select('_id name email');
+    res.json(agents);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -91,5 +127,7 @@ module.exports = {
   getAgentById,
   updateAgent,
   deleteAgent,
-  getAgentInfo
+  restoreAgent,
+  getAgentInfo,
+  searchAgents
 };

@@ -17,6 +17,10 @@ const escalationSchema = new mongoose.Schema(
       required: true,
       unique: true, 
     },
+    caseOwner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Agent',
+    },
     customerName: {
       type: String,
       required: true,

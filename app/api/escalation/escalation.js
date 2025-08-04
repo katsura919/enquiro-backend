@@ -1,7 +1,9 @@
+
 const Escalation = require('../../models/escalationModel');
 const Business = require('../../models/businessModel');
 const Session = require('../../models/sessionModel');
 const Activity = require('../../models/activityModel');
+const Agent = require('../../models/agentModel');
 const { sendEscalationEmail } = require('../../services/escalationEmail');
 
 // Helper function to generate a unique case number
@@ -43,7 +45,7 @@ const createEscalation = async (req, res) => {
       customerEmail, 
       customerPhone, 
       concern, 
-      description 
+      description
     });
     await escalation.save();
 
@@ -58,6 +60,7 @@ const createEscalation = async (req, res) => {
       customerPhone: escalation.customerPhone,
       concern: escalation.concern,
       description: escalation.description,
+      caseOwner: escalation.caseOwner,
       createdAt: escalation.createdAt,
       updatedAt: escalation.updatedAt
     });
@@ -126,10 +129,10 @@ const getEscalationById = async (req, res) => {
 const updateEscalation = async (req, res) => {
   try {
     const { id } = req.params;
-    const { caseNumber, customerName, customerEmail, customerPhone, concern, description } = req.body;
+    const { caseNumber, customerName, customerEmail, customerPhone, concern, description, caseOwner } = req.body;
     const escalation = await Escalation.findByIdAndUpdate(
       id,
-      { caseNumber, customerName, customerEmail, customerPhone, concern, description },
+      { caseNumber, customerName, customerEmail, customerPhone, concern, description, caseOwner },
       { new: true, runValidators: true }
     );
     if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
@@ -190,6 +193,37 @@ const updateEscalationStatus = async (req, res) => {
   }
 };
 
+// Update case owner by escalation ID
+const updateCaseOwner = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { caseOwner } = req.body;
+    if (!caseOwner) {
+      return res.status(400).json({ error: 'Missing caseOwner in request body.' });
+    }
+    
+    const escalation = await Escalation.findByIdAndUpdate(
+      id,
+      { caseOwner },
+      { new: true, runValidators: true }
+    );
+    if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
+    
+    // Log the case owner change activity
+    const activity = new Activity({
+      escalationId: id,
+      action: 'Change Case Owner',
+      details: `Case owner updated to agent ID: ${caseOwner}`
+    });
+    await activity.save();
+    
+    res.json(escalation);
+  } catch (err) {
+    console.error('Error updating case owner:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
 module.exports = { 
   createEscalation, 
   getEscalationsByBusiness, 
@@ -197,5 +231,6 @@ module.exports = {
   getEscalationById, 
   updateEscalation, 
   deleteEscalation, 
-  updateEscalationStatus 
+  updateEscalationStatus,
+  updateCaseOwner
 };

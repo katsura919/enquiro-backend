@@ -12,12 +12,17 @@ router.get('/:agentId/stats', getAgentStats);
 router.post('/', agentController.createAgent);
 // Get all agents (optionally by business)
 router.get('/', agentController.getAgents);
+
+// Search agents by name (for case owner selection)
+router.get('/search', agentController.searchAgents);
 // Get agent by ID
 router.get('/:id', agentController.getAgentById);
 // Update agent
 router.put('/:id', agentController.updateAgent);
 // Delete agent
 router.delete('/:id', agentController.deleteAgent);
+// Restore agent
+router.patch('/:id/restore', agentController.restoreAgent);
 
 // Status routes
 router.use('/', statusRoutes);
