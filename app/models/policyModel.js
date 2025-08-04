@@ -18,8 +18,6 @@ const policySchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['privacy', 'terms', 'refund', 'shipping', 'warranty', 'general'],
-    required: true
   },
   isActive: {
     type: Boolean,

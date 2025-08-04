@@ -1,5 +1,9 @@
+
 const express = require('express');
 const router = express.Router();
+const authMiddleware = require('../../middleware/authMiddleware');
+const { createProductValidation, updateProductValidation } = require('../../utils/validation/productValidation');
+const handleValidationErrors = require('../../utils/validation/validationErrorHandler');
 const { 
   createProduct, 
   getProducts, 
@@ -13,34 +17,69 @@ const {
   updateProductQuantity 
 } = require('./product');
 
+
 // Create new Product
-router.post('/', createProduct);
+router.post('/', 
+  authMiddleware,
+  createProductValidation, 
+  handleValidationErrors, 
+  createProduct
+);
 
 // Get all Products for a business (with optional filters)
-router.get('/business/:businessId', getProducts);
+router.get('/business/:businessId', 
+  authMiddleware,
+  getProducts
+);
 
 // Search Products
-router.get('/business/:businessId/search', searchProducts);
+router.get('/business/:businessId/search', 
+  authMiddleware,
+  searchProducts
+);
 
 // Get Product categories for a business
-router.get('/business/:businessId/categories', getProductCategories);
+router.get('/business/:businessId/categories', 
+  authMiddleware,
+  getProductCategories
+);
 
 // Get Products by category
-router.get('/business/:businessId/category/:category', getProductsByCategory);
+router.get('/business/:businessId/category/:category', 
+  authMiddleware,
+  getProductsByCategory
+);
 
 // Get Product by SKU
-router.get('/business/:businessId/sku/:sku', getProductBySku);
+router.get('/business/:businessId/sku/:sku', 
+  authMiddleware,
+  getProductBySku
+);
 
 // Get single Product by ID
-router.get('/:id', getProductById);
+router.get('/:id', 
+  authMiddleware,
+  getProductById
+);
 
 // Update Product
-router.put('/:id', updateProduct);
+router.put('/:id', 
+  authMiddleware,
+  updateProductValidation, 
+  handleValidationErrors, 
+  updateProduct
+  );
 
 // Update Product quantity only
-router.patch('/:id/quantity', updateProductQuantity);
+router.patch('/:id/quantity', 
+  authMiddleware,
+  updateProductQuantity
+);
 
 // Delete Product
-router.delete('/:id', deleteProduct);
+router.delete('/:id', 
+  authMiddleware,
+  deleteProduct
+);
 
 module.exports = router;

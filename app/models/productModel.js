@@ -13,7 +13,6 @@ const productSchema = new mongoose.Schema({
   },
   sku: {
     type: String,
-    required: true,
     trim: true
   },
   description: {
@@ -22,7 +21,6 @@ const productSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    required: true,
     trim: true
   },
   price: {
