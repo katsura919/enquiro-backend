@@ -21,7 +21,6 @@ router.get('/',
 
 // Get business by slug
 router.get('/slug/:slug', 
-    authMiddleware,
     businessController.getBusinessBySlug);
 
 // Get a business by ID

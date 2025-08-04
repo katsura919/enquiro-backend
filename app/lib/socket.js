@@ -23,6 +23,42 @@ function setupSocket(server) {
 
     console.log(`[SOCKET] New connection: ${socket.id}`);
 
+    // Admin/Dashboard joins business status room for monitoring
+    socket.on('join_business_status', ({ businessId }) => {
+      try {
+        socket.join(`status_${businessId}`);
+        joinedBusinessId = businessId;
+        
+        console.log(`[SOCKET] Admin joined business status room: businessId=${businessId}, socketId=${socket.id}`);
+        
+        // Send current agent statuses to the admin dashboard
+        AgentStatus.find({ businessId })
+          .populate('agentId', 'name email')
+          .then(statuses => {
+            socket.emit('initial_agent_statuses', statuses);
+          })
+          .catch(error => {
+            console.error('[SOCKET] Error fetching initial agent statuses:', error);
+          });
+
+        // Send current queue status to the admin dashboard
+        ChatQueue.find({ businessId, status: { $in: ['waiting', 'assigned'] } })
+          .then(queueEntries => {
+            const queueStats = {
+              waiting: queueEntries.filter(q => q.status === 'waiting').length,
+              inProgress: queueEntries.filter(q => q.status === 'assigned').length,
+              total: queueEntries.length
+            };
+            socket.emit('initial_queue_status', queueStats);
+          })
+          .catch(error => {
+            console.error('[SOCKET] Error fetching initial queue status:', error);
+          });
+      } catch (error) {
+        console.error('[SOCKET] Error in join_business_status:', error);
+      }
+    });
+
     // Agent joins status room
     socket.on('join_status', async ({ businessId, agentId }) => {
       try {
@@ -78,7 +114,7 @@ function setupSocket(server) {
         socket.join(`queue_${businessId}`);
         joinedBusinessId = businessId;
         joinedEscalationId = escalationId;
-        isCustomerConnection = true; // Mark this as a customer connection
+        isCustomerConnection = true; 
 
         console.log(`[SOCKET] Customer requesting chat: businessId=${businessId}, escalationId=${escalationId}, socketId=${socket.id}`);
 
@@ -91,6 +127,10 @@ function setupSocket(server) {
         });
 
         console.log(`[SOCKET] Customer added to queue:`, queueEntry);
+
+        // Broadcast queue update to admin dashboard
+        const queueStats = await getQueueStats(businessId);
+        io.to(`status_${businessId}`).emit('queue_status_update', queueStats);
 
         // Try to assign an available agent immediately
         const immediateAssignment = await assignAgent(businessId, escalationId);
@@ -121,6 +161,10 @@ function setupSocket(server) {
           { status: 'completed' }
         );
         console.log(`[SOCKET] Customer left queue: escalationId=${escalationId}`);
+        
+        // Broadcast queue update to admin dashboard
+        const queueStats = await getQueueStats(businessId);
+        io.to(`status_${businessId}`).emit('queue_status_update', queueStats);
       } catch (error) {
         console.error('[SOCKET] Error in leave_queue:', error);
       }
@@ -195,6 +239,10 @@ function setupSocket(server) {
           agentId: availableAgentStatus.agentId, 
           status: 'in-chat' 
         });
+
+        // Broadcast queue update to admin dashboard
+        const queueStats = await getQueueStats(businessId);
+        io.to(`status_${businessId}`).emit('queue_status_update', queueStats);
 
         const room = `chat_${escalationId}`;
         const agentId = availableAgentStatus.agentId;
@@ -273,6 +321,26 @@ function setupSocket(server) {
       } catch (error) {
         console.error('[SOCKET] Error getting customer info:', error);
         return null;
+      }
+    }
+
+    // Helper function to get queue statistics
+    async function getQueueStats(businessId) {
+      try {
+        const queueEntries = await ChatQueue.find({ 
+          businessId, 
+          status: { $in: ['waiting', 'assigned'] } 
+        });
+        
+        return {
+          waiting: queueEntries.filter(q => q.status === 'waiting').length,
+          inProgress: queueEntries.filter(q => q.status === 'assigned').length,
+          total: queueEntries.length,
+          updatedAt: new Date()
+        };
+      } catch (error) {
+        console.error('[SOCKET] Error getting queue stats:', error);
+        return { waiting: 0, inProgress: 0, total: 0, updatedAt: new Date() };
       }
     }
 
