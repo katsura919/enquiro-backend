@@ -112,17 +112,7 @@ const login = async (req, res) => {
       JWT_SECRET
     );
 
-    res.json({
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        businessId: user.businessId,
-      },
-    });
+    res.json({ token });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: "An error occurred during login" });

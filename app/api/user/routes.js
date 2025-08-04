@@ -6,6 +6,12 @@ const {createUserValidation, updateUserValidation} = require('../../utils/valida
 const handleValidationErrors = require('../../utils/validation/validationErrorHandler');
 
 
+// Fetch user info using JWT token
+router.get('/info', 
+    authMiddleware,
+    userController.getUserInfoByToken
+);
+
 // Create a user
 router.post('/', 
     authMiddleware,

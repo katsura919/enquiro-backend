@@ -1,5 +1,6 @@
 
 const jwt = require('jsonwebtoken');
+const Agent = require('../../models/agentModel');
 
 // Fetch agent info using JWT token
 const getAgentInfo = async (req, res) => {
@@ -22,7 +23,7 @@ const getAgentInfo = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-const Agent = require('../../models/agentModel');
+
 
 // Create a new agent
 const createAgent = async (req, res) => {
