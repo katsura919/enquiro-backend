@@ -23,6 +23,12 @@ router.get('/business/:businessId',
     escalationController.getEscalationsByBusiness
 );
 
+// Count escalations for a business
+router.get('/business/:businessId/count', 
+    authMiddleware,
+    escalationController.countEscalationsByBusiness
+);
+
 // Get all escalations for a session
 router.get('/session/:sessionId', 
     authMiddleware,

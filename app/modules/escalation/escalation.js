@@ -5,6 +5,7 @@ const Session = require('../../models/sessionModel');
 const Activity = require('../../models/activityModel');
 const Agent = require('../../models/agentModel');
 const { sendEscalationEmail } = require('../../services/escalationEmail');
+const mongoose = require('mongoose');
 
 // Helper function to generate a unique case number
 const generateUniqueCaseNumber = async () => {
@@ -70,15 +71,29 @@ const createEscalation = async (req, res) => {
   }
 };
 
-// Get all escalations for a specific business, with optional status filter and pagination
+// Get all escalations for a specific business, with optional status filter, search, and pagination
 const getEscalationsByBusiness = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const { status, page = 1, limit = 10 } = req.query;
+    const { status, search, page = 1, limit = 10 } = req.query;
     const query = { businessId };
     
+    // Add status filter
     if (status && status !== 'all') {
       query.status = status;
+    }
+    
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i'); // Case-insensitive search
+      query.$or = [
+        { caseNumber: searchRegex },
+        { customerName: searchRegex },
+        { customerEmail: searchRegex },
+        { customerPhone: searchRegex },
+        { concern: searchRegex },
+        { description: searchRegex }
+      ];
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -93,6 +108,7 @@ const getEscalationsByBusiness = async (req, res) => {
       page: parseInt(page),
       limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
+      searchTerm: search || null, // Include search term in response for frontend reference
     });
   } catch (err) {
     console.error('Error fetching escalations by business:', err);
@@ -224,6 +240,49 @@ const updateCaseOwner = async (req, res) => {
   }
 };
 
+// Count escalations for a specific business with status breakdown
+const countEscalationsByBusiness = async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    
+    // Verify business exists
+    const business = await Business.findById(businessId);
+    if (!business) {
+      return res.status(404).json({ error: 'Business not found.' });
+    }
+    
+    // Count escalations grouped by status
+    const statusCounts = await Escalation.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(businessId) } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Initialize counts for all possible statuses
+    const result = {
+      total: 0,
+      escalated: 0,
+      resolved: 0,
+      pending: 0
+    };
+    
+    // Fill in actual counts
+    statusCounts.forEach(item => {
+      result[item._id] = item.count;
+      result.total += item.count;
+    });
+    
+    res.json(result);
+  } catch (err) {
+    console.error('Error counting escalations by business:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
 module.exports = { 
   createEscalation, 
   getEscalationsByBusiness, 
@@ -232,5 +291,6 @@ module.exports = {
   updateEscalation, 
   deleteEscalation, 
   updateEscalationStatus,
-  updateCaseOwner
+  updateCaseOwner,
+  countEscalationsByBusiness
 };
