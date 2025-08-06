@@ -5,7 +5,8 @@ const allowedOrigins = [
   "http://localhost:3001",
   "https://admin-codey.vercel.app",
   "https://enquiro.vercel.app",
-  "https://agent-enquiro.vercel.app"
+  "https://agent-enquiro.vercel.app",
+  "https://enquiro-admin-web.onrender.com"
 ];
 
 const corsOptions = {
