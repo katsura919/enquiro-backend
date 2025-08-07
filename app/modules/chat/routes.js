@@ -31,6 +31,9 @@ router.post('/send-message', sendMessageController.sendMessage);
 // Get all messages for a session
 router.get('/session/:sessionId/messages', sendMessageController.getSessionMessages);
 
+// Get all messages for an escalation (live chat)
+router.get('/escalation/:escalationId/messages', sendMessageController.getEscalationMessages);
+
 // Queue management routes
 router.get('/queue/:businessId', queueController.getQueue);
 router.delete('/queue/:queueId', queueController.removeFromQueue);

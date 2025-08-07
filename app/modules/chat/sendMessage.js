@@ -26,6 +26,7 @@ const sendMessage = async (req, res) => {
       message,
       senderType,
       agentId: senderType === 'agent' ? agentId : null,
+      escalationId: escalationId || null,
       isGoodResponse: null
     });
     await chat.save();
@@ -78,11 +79,21 @@ const sendMessage = async (req, res) => {
   }
 };
 
-// Get all messages for a session
+// Get all messages for a session (including system messages)
 const getSessionMessages = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const chats = await Chat.find({ sessionId }).sort({ createdAt: 1 });
+    const { includeSystem = true } = req.query;
+    
+    let query = { sessionId };
+    if (includeSystem === 'false') {
+      query.senderType = { $ne: 'system' };
+    }
+    
+    const chats = await Chat.find(query)
+      .populate('agentId', 'name email')
+      .sort({ createdAt: 1 });
+    
     res.json(chats);
   } catch (err) {
     console.error('[getSessionMessages] Error:', err);
@@ -90,8 +101,31 @@ const getSessionMessages = async (req, res) => {
   }
 };
 
+// Get all messages for an escalation (live chat)
+const getEscalationMessages = async (req, res) => {
+  try {
+    const { escalationId } = req.params;
+    const { includeSystem = true } = req.query;
+    
+    let query = { escalationId };
+    if (includeSystem === 'false') {
+      query.senderType = { $ne: 'system' };
+    }
+    
+    const chats = await Chat.find(query)
+      .populate('agentId', 'name email')
+      .sort({ createdAt: 1 });
+    
+    res.json(chats);
+  } catch (err) {
+    console.error('[getEscalationMessages] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 
 module.exports = {
   sendMessage,
-  getSessionMessages
+  getSessionMessages,
+  getEscalationMessages
 };

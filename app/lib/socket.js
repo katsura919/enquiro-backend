@@ -4,6 +4,7 @@ const AgentStatus = require('../models/agentStatusModel');
 const Agent = require('../models/agentModel');
 const Escalation = require('../models/escalationModel');
 const messageEvents = require('./socketEvents/messageEvents');
+const SystemMessageHelper = require('../utils/systemMessageHelper');
 
 function setupSocket(server) {
   const io = new Server(server, {
@@ -118,6 +119,13 @@ function setupSocket(server) {
 
         console.log(`[SOCKET] Customer requesting chat: businessId=${businessId}, escalationId=${escalationId}, socketId=${socket.id}`);
 
+        // Get escalation to find sessionId
+        const escalation = await Escalation.findById(escalationId);
+        if (!escalation) {
+          socket.emit('chat_error', { message: 'Escalation not found' });
+          return;
+        }
+
         // Add to queue
         const queueEntry = await ChatQueue.create({ 
           businessId, 
@@ -146,11 +154,28 @@ function setupSocket(server) {
     });
 
     // Customer joins escalation room
-    socket.on('join_escalation', ({ escalationId }) => {
-      socket.join(escalationId);
-      joinedEscalationId = escalationId;
-      isCustomerConnection = true; // Mark this as a customer connection
-      console.log(`[SOCKET] Customer joined escalation room: escalationId=${escalationId}, socketId=${socket.id}`);
+    socket.on('join_escalation', async ({ escalationId, businessId }) => {
+      try {
+        socket.join(escalationId);
+        joinedEscalationId = escalationId;
+        joinedBusinessId = businessId;
+        isCustomerConnection = true; // Mark this as a customer connection
+        
+        console.log(`[SOCKET] Customer joined escalation room: escalationId=${escalationId}, socketId=${socket.id}`);
+        
+        // Get escalation to find sessionId and create system message
+        const escalation = await Escalation.findById(escalationId);
+        if (escalation && businessId) {
+          await SystemMessageHelper.customerJoined(
+            businessId, 
+            escalation.sessionId, 
+            escalationId, 
+            io
+          );
+        }
+      } catch (error) {
+        console.error('[SOCKET] Error in join_escalation:', error);
+      }
     });
 
     // Customer leaves queue
@@ -279,6 +304,27 @@ function setupSocket(server) {
           console.warn(`[SOCKET] No customer socket found for escalationId=${escalationId}`);
         }
 
+        // Get escalation for system messages
+        const escalation = await Escalation.findById(escalationId);
+        if (escalation) {
+          // Create system messages for chat events
+          await SystemMessageHelper.chatStarted(
+            businessId, 
+            escalation.sessionId, 
+            escalationId, 
+            agentId, 
+            io
+          );
+
+          await SystemMessageHelper.agentJoined(
+            businessId, 
+            escalation.sessionId, 
+            escalationId, 
+            agentId, 
+            io
+          );
+        }
+
         // Notify both parties that chat has started
         io.to(room).emit('chat_started', {
           agentId,
@@ -366,6 +412,19 @@ function setupSocket(server) {
             if (activeChat) {
               console.log(`[SOCKET] Agent ${joinedAgentId} disconnected during active chat ${activeChat.escalationId}`);
               
+              // Get escalation for system message
+              const escalation = await Escalation.findById(activeChat.escalationId);
+              if (escalation) {
+                await SystemMessageHelper.agentLeft(
+                  joinedBusinessId, 
+                  escalation.sessionId, 
+                  activeChat.escalationId, 
+                  joinedAgentId, 
+                  io, 
+                  'disconnected'
+                );
+              }
+              
               // Notify customer about agent disconnection
               const room = `chat_${activeChat.escalationId}`;
               io.to(room).emit('agent_disconnected_during_chat', {
@@ -407,6 +466,9 @@ function setupSocket(server) {
         }
 
         if (joinedEscalationId && isCustomerConnection) {
+          // Get escalation for system message before handling disconnect
+          const escalation = await Escalation.findById(joinedEscalationId);
+          
           // Only remove from queue if this is actually a customer socket disconnecting
           // and the queue entry is still waiting (not assigned to an agent)
           const queueEntry = await ChatQueue.findOne({ 
@@ -421,6 +483,16 @@ function setupSocket(server) {
             );
             console.log(`[SOCKET] Customer disconnected from waiting queue: escalationId=${joinedEscalationId}`);
           } else {
+            // Customer was in active chat, create system message
+            if (escalation && joinedBusinessId) {
+              await SystemMessageHelper.customerLeft(
+                joinedBusinessId, 
+                escalation.sessionId, 
+                joinedEscalationId, 
+                io, 
+                'disconnected'
+              );
+            }
             console.log(`[SOCKET] Customer disconnected but was not in waiting queue: escalationId=${joinedEscalationId}`);
           }
         } else if (joinedEscalationId && !isCustomerConnection) {
@@ -481,6 +553,19 @@ function setupSocket(server) {
     socket.on('end_chat', async ({ escalationId, agentId }) => {
       try {
         const room = `chat_${escalationId}`;
+        
+        // Get escalation for system messages
+        const escalation = await Escalation.findById(escalationId);
+        if (escalation && joinedBusinessId) {
+          // Only create one system message when chat ends normally
+          await SystemMessageHelper.chatEnded(
+            joinedBusinessId, 
+            escalation.sessionId, 
+            escalationId, 
+            agentId, 
+            io
+          );
+        }
         
         // Update agent status back to away (was busy before chat)
         await AgentStatus.findOneAndUpdate(
