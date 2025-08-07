@@ -1,22 +1,29 @@
 const Chat = require("../../models/chatModel");
 const Business = require('../../models/businessModel');
 const Session = require('../../models/sessionModel');
+const { deleteChatWithFiles } = require('../../utils/fileManagement');
 
 // Controller to delete a chat by its ID
 const deleteChat = async (req, res) => {
   const { chatId } = req.params;
 
   try {
-    const deletedChat = await Chat.findByIdAndDelete(chatId);
-
-    if (!deletedChat) {
-      return res.status(404).json({ error: "Chat not found" });
-    }
-
-    res.status(200).json({ message: "Chat deleted successfully", chat: deletedChat });
+    // Use the file management utility to delete chat with associated files
+    const result = await deleteChatWithFiles(chatId);
+    
+    res.status(200).json({ 
+      message: "Chat and associated files deleted successfully", 
+      success: result.success 
+    });
   } catch (error) {
     console.error("Error deleting chat:", error);
-    res.status(500).json({ error: "An error occurred while deleting the chat", details: error.message });
+    if (error.message === 'Chat not found') {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+    res.status(500).json({ 
+      error: "An error occurred while deleting the chat", 
+      details: error.message 
+    });
   }
 };
 

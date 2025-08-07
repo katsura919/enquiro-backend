@@ -2,6 +2,8 @@ const express = require("express");
 const chatController = require("./chat");
 const sendMessageController = require('./sendMessage');
 const queueController = require('./queue');
+const { upload } = require('../../services/fileUploadService');
+const { getFileUsageStats, cleanupOrphanedFiles } = require('../../utils/fileManagement');
 
 const router = express.Router();
 
@@ -28,6 +30,12 @@ router.put('/:id', chatController.updateChat);
 // Send a message (agent)
 router.post('/send-message', sendMessageController.sendMessage);
 
+// Send a message with file upload (single file)
+router.post('/send-message-with-file', upload.single('file'), sendMessageController.sendMessageWithFile);
+
+// Send a message with multiple files
+router.post('/send-message-with-files', upload.array('files', 5), sendMessageController.sendMessage);
+
 // Get all messages for a session
 router.get('/session/:sessionId/messages', sendMessageController.getSessionMessages);
 
@@ -38,5 +46,26 @@ router.get('/escalation/:escalationId/messages', sendMessageController.getEscala
 router.get('/queue/:businessId', queueController.getQueue);
 router.delete('/queue/:queueId', queueController.removeFromQueue);
 router.post('/queue/cleanup', queueController.cleanupQueue);
+
+// File management routes
+router.get('/files/stats/:businessId', async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const stats = await getFileUsageStats(businessId);
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/files/cleanup/:businessId', async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const result = await cleanupOrphanedFiles(businessId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports = router;

@@ -14,8 +14,48 @@ const chatSchema = new mongoose.Schema(
     },
     message: {
       type: String,
-      required: true,
+      required: function() {
+        return this.messageType === 'text';
+      },
     },
+    messageType: {
+      type: String,
+      enum: ['text', 'image', 'file'],
+      required: true,
+      default: 'text',
+    },
+    attachments: [{
+      fileName: {
+        type: String,
+        required: function() {
+          return this.messageType === 'image' || this.messageType === 'file';
+        },
+      },
+      fileUrl: {
+        type: String,
+        required: function() {
+          return this.messageType === 'image' || this.messageType === 'file';
+        },
+      },
+      fileSize: {
+        type: Number,
+        default: null,
+      },
+      mimeType: {
+        type: String,
+        required: function() {
+          return this.messageType === 'image' || this.messageType === 'file';
+        },
+      },
+      publicId: {
+        type: String,
+        default: null, // Cloudinary public ID for file deletion
+      },
+      uploadedAt: {
+        type: Date,
+        default: Date.now,
+      }
+    }],
     senderType: {
       type: String,
       enum: ['agent', 'ai', 'customer', 'system'],

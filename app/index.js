@@ -18,6 +18,7 @@ const serviceRoutes = require('./modules/service/routes');
 const productRoutes = require('./modules/product/routes');
 const agentRoutes = require('./modules/agent/routes');  
 const queueRoutes = require('./modules/queue');
+const fileRoutes = require('./modules/file/routes');
 
 const api = express.Router();
 
@@ -39,5 +40,6 @@ api.use('/service', serviceRoutes);
 api.use('/product', productRoutes);
 api.use('/agent', agentRoutes);  
 api.use('/queue', queueRoutes);  
+api.use('/file', fileRoutes);  
 
 module.exports = api;
