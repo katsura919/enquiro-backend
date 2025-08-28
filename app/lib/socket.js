@@ -1,8 +1,8 @@
 const { Server } = require('socket.io');
-const ChatQueue = require('../models/chatQueueModel');
-const AgentStatus = require('../models/agentStatusModel');
-const Agent = require('../models/agentModel');
-const Escalation = require('../models/escalationModel');
+const ChatQueue = require('../models/chat-queue-model');
+const AgentStatus = require('../models/agent-status-model');
+const Agent = require('../models/agent-model');
+const Escalation = require('../models/escalation-model');
 const messageEvents = require('./socketEvents/messageEvents');
 const SystemMessageHelper = require('../utils/systemMessageHelper');
 

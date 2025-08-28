@@ -1,6 +1,6 @@
-const Chat = require('../models/chatModel');
-const Agent = require('../models/agentModel');
-const Escalation = require('../models/escalationModel');
+const Chat = require('../models/chat-model');
+const Agent = require('../models/agent-model');
+const Escalation = require('../models/escalation-model');
 
 /**
  * Helper class for creating and storing system messages in chat

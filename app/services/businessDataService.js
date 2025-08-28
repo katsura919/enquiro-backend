@@ -1,8 +1,8 @@
-const Business = require("../models/businessModel");
-const FAQ = require("../models/faqModel");
-const Policy = require("../models/policyModel");  
-const Product = require("../models/productModel");
-const Service = require("../models/serviceModel");
+const Business = require("../models/business-model");
+const FAQ = require("../models/faq-model");
+const Policy = require("../models/policy-model");  
+const Product = require("../models/product-model");
+const Service = require("../models/service-model");
 const { searchMultipleCollections } = require("./queryProcessingService");
 
 /**

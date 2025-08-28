@@ -1,4 +1,4 @@
-const Chat = require('../models/chatModel');
+const Chat = require('../models/chat-model');
 const { deleteFromCloudinary } = require('../services/fileUploadService');
 
 // Delete a chat message and its associated files

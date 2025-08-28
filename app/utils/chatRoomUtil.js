@@ -1,4 +1,4 @@
-const Escalation = require('../models/escalationModel');
+const Escalation = require('../models/escalation-model');
 
 /**
  * Get the chat room name for real-time messaging based on sessionId.

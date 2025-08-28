@@ -1,4 +1,4 @@
-const Activity = require('../models/activityModel');
+const Activity = require('../models/activity-model');
 
 /**
  * Logs an activity for an escalation
