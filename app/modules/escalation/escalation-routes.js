@@ -61,7 +61,19 @@ router.patch(
   '/:id/case-owner',
   authMiddleware,
   [
-    body('caseOwner').isMongoId().withMessage('Valid agent id is required')
+    body('caseOwner')
+      .custom((value) => {
+        // Allow empty string for unassigned case
+        if (value === "" || value === null || value === undefined) {
+          return true;
+        }
+        // For non-empty values, check if it's a valid MongoDB ObjectId
+        const mongoose = require('mongoose');
+        if (!mongoose.Types.ObjectId.isValid(value)) {
+          throw new Error('Valid agent id is required');
+        }
+        return true;
+      })
   ],
   handleValidationErrors,
   escalationController.updateCaseOwner

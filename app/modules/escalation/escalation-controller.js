@@ -132,7 +132,7 @@ const getEscalationsBySession = async (req, res) => {
 const getEscalationById = async (req, res) => {
   try {
     const { id } = req.params;
-    const escalation = await Escalation.findById(id);
+    const escalation = await Escalation.findById(id).populate('caseOwner', 'name email phone');
     if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
     res.json(escalation);
   } catch (err) {
@@ -214,26 +214,39 @@ const updateCaseOwner = async (req, res) => {
   try {
     const { id } = req.params;
     const { caseOwner } = req.body;
-    if (!caseOwner) {
-      return res.status(400).json({ error: 'Missing caseOwner in request body.' });
+    
+    // Handle case where caseOwner is empty string (unassigned)
+    const caseOwnerValue = caseOwner === "" ? null : caseOwner;
+    
+    // If caseOwner is provided and not null, verify it's a valid agent
+    if (caseOwnerValue) {
+      const agent = await Agent.findById(caseOwnerValue);
+      if (!agent) {
+        return res.status(400).json({ error: 'Invalid agent ID. Agent not found.' });
+      }
     }
     
     const escalation = await Escalation.findByIdAndUpdate(
       id,
-      { caseOwner },
+      { caseOwner: caseOwnerValue },
       { new: true, runValidators: true }
-    );
+    ).populate('caseOwner', 'name email phone');
+    
     if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
     
     // Log the case owner change activity
+    const activityDetails = caseOwnerValue 
+      ? `Case assigned to ${escalation.caseOwner?.name || 'agent'}`
+      : 'Case unassigned';
+      
     const activity = new Activity({
       escalationId: id,
-      action: 'Change Case Owner',
-      details: `Case owner updated to agent ID: ${caseOwner}`
+      action: caseOwnerValue ? 'Case Owner Assigned' : 'Case Owner Unassigned',
+      details: activityDetails
     });
     await activity.save();
     
-    res.json(escalation);
+    res.json({ success: true, data: escalation });
   } catch (err) {
     console.error('Error updating case owner:', err);
     res.status(500).json({ error: 'Server error.' });

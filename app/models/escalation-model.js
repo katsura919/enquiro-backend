@@ -43,7 +43,6 @@ const escalationSchema = new mongoose.Schema(
       enum: ['escalated', 'resolved', 'pending'],
       default: 'escalated',
     },
-    // Add email thread tracking
     emailThreadId: {
       type: String,
       index: true, 
