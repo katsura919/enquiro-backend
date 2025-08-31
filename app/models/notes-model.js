@@ -12,6 +12,11 @@ const notesSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true
+    },
+    createdBy: {
+      type: String,
+      required: true,
+      trim: true
     }
   },
   {
@@ -22,6 +27,7 @@ const notesSchema = new mongoose.Schema(
 // Indexes for better query performance
 notesSchema.index({ escalationId: 1, createdAt: -1 });
 notesSchema.index({ createdAt: -1 });
+notesSchema.index({ createdBy: 1 });
 
 // Instance method to check if note is recent (within last 24 hours)
 notesSchema.methods.isRecent = function() {

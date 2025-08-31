@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 const createNote = async (req, res) => {
   try {
     const { escalationId } = req.params;
-    const { content } = req.body;
+    const { content, createdBy } = req.body;
 
     const escalation = await Escalation.findById(escalationId);
     if (!escalation) {
@@ -19,7 +19,8 @@ const createNote = async (req, res) => {
 
     const note = new Notes({
       escalationId,
-      content
+      content,
+      createdBy
     });
 
     await note.save();
