@@ -32,8 +32,7 @@ const getRecentHistory = async (sessionId, limit = 4) => {
 
 // Enhanced prompt construction with better structure and natural responses
 const constructPrompt = ({ query, knowledge, history, isEscalation, businessName }) => `
-You are ${businessName}'s friendly and helpful AI assistant. Act like a real, knowledgeable person who works for the company.
-
+You are working for ${businessName} company. Be a friendly and helpful AI assistant. Act like a real, knowledgeable person.
 ${!isEscalation && knowledge?.length > 0 ? 
 `**Available Business Information:**
 ${knowledge.map((k, i) => {
@@ -208,11 +207,12 @@ const askAI = async (req, res) => {
     const recentHistory = await getRecentHistory(session._id);
 
     const model = genAI.getGenerativeModel({ 
+      //model: "gemini-2.5-pro",
       model: "gemini-2.0-flash",
       generationConfig: {
         temperature: 0.7,
         topP: 0.9,
-        maxOutputTokens: 500, // Limit response length
+        maxOutputTokens: 1000, // Limit response length
       }
     });
 
@@ -230,7 +230,7 @@ Business name: ${business.name}
 
 The customer wants to speak with a human. Generate a warm, helpful response that:
 1. Acknowledges their request positively
-2. Lets them know you're connecting them
+2. Lets them know that you need to get their contact details first before you queue them to the live chat
 3. Includes this link: [click here to speak with a representative](escalate://now)
 
 Keep it natural and friendly, like a real person would respond.
@@ -253,6 +253,8 @@ Keep it natural and friendly, like a real person would respond.
           businessName: business.name
         });
         
+        console.log(chatPrompt); // For debugging
+
         const result = await model.generateContent(chatPrompt);
         responseText = result.response.text();
         

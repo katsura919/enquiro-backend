@@ -16,8 +16,8 @@ const createEscalationValidation =
   .isEmail()
   .withMessage('Valid customerEmail is required'),
   body('concern')
-  .notEmpty()
-  .withMessage('concern is required'),
+  .optional()
+  .isString(),
   body('customerPhone')
   .optional()
   .isString(),

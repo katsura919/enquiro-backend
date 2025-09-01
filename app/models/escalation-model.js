@@ -34,8 +34,8 @@ const escalationSchema = new mongoose.Schema(
     },
     concern: {
       type: String,
-      required: true,
-    },    description: {
+    },
+    description: {
       type: String,
     },
     status: {
