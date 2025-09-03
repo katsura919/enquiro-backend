@@ -229,11 +229,9 @@ User explicitly requested: "${query}"
 Business name: ${business.name}
 
 The customer wants to speak with a human. Generate a warm, helpful response that:
-1. Acknowledges their request positively
-2. Lets them know that you need to get their contact details first before you queue them to the live chat
-3. Includes this link: [click here to speak with a representative](escalate://now)
+1. Make sure to gather the customer's name, email and contact number.
+2. Includes this link at the last part of the message: [click here to speak with a representative](escalate://now)
 
-Keep it natural and friendly, like a real person would respond.
 `;
 
       const escalationResponse = await model.generateContent(escalationPrompt);
