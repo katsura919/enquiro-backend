@@ -207,8 +207,8 @@ const askAI = async (req, res) => {
     const recentHistory = await getRecentHistory(session._id);
 
     const model = genAI.getGenerativeModel({ 
-      //model: "gemini-2.5-pro",
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-pro",
+      // model: "gemini-2.0-flash",
       generationConfig: {
         temperature: 0.7,
         topP: 0.9,

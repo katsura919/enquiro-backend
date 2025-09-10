@@ -15,6 +15,8 @@ router.get('/', agentController.getAgents);
 
 // Search agents by name (for case owner selection)
 router.get('/search', agentController.searchAgents);
+// Get agents by business ID
+router.get('/:businessId', agentController.getAgentsByBusiness);
 // Get agent by ID
 router.get('/:id', agentController.getAgentById);
 // Update agent

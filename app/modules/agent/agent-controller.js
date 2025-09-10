@@ -106,6 +106,22 @@ const restoreAgent = async (req, res) => {
   }
 };
 
+// Get agents by business ID
+const getAgentsByBusiness = async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const filter = { 
+      businessId: businessId,
+      deletedAt: null 
+    };
+    
+    const agents = await Agent.find(filter).select('-password');
+    res.json(agents);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 // Search agents by name (for case owner selection)
 const searchAgents = async (req, res) => {
   try {
@@ -130,5 +146,6 @@ module.exports = {
   deleteAgent,
   restoreAgent,
   getAgentInfo,
+  getAgentsByBusiness,
   searchAgents
 };
