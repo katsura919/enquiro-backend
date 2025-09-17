@@ -129,8 +129,15 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
 const recognizeIntent = (query, history = []) => {
   const lowerQuery = query.toLowerCase();
   
-  // Case followup patterns (check first as it's specific)
-  if (/case|ticket|reference|follow.*up|status.*case|case.*status|escalation.*number|case.*number/.test(lowerQuery)) {
+  // Check for live chat request with case number (high priority - returning customer)
+  if (/speak to|talk to|human|agent|representative|manager|supervisor/.test(lowerQuery) && 
+      /case|ticket|reference|escalation/.test(lowerQuery)) {
+    return INTENT_TYPES.ESCALATION_REQUEST; // Treat as escalation but with existing case context
+  }
+  
+  // Case followup patterns (check before general escalation)
+  if (/case|ticket|reference|follow.*up|status.*case|case.*status|escalation.*number|case.*number/.test(lowerQuery) &&
+      !/speak to|talk to|human|agent|representative|manager|supervisor/.test(lowerQuery)) {
     return INTENT_TYPES.CASE_FOLLOWUP;
   }
   
@@ -139,7 +146,7 @@ const recognizeIntent = (query, history = []) => {
     return INTENT_TYPES.GREETING;
   }
   
-  // Escalation request patterns
+  // Escalation request patterns (new customers)
   if (/speak to|talk to|human|agent|representative|manager|supervisor/.test(lowerQuery)) {
     return INTENT_TYPES.ESCALATION_REQUEST;
   }
@@ -314,6 +321,36 @@ const getEscalationCaseStatus = async (caseNumber, businessId) => {
     };
   } catch (error) {
     console.error('Error fetching escalation case:', error);
+    return null;
+  }
+};
+
+// Fetch full escalation details for live chat continuation
+const getEscalationForLiveChat = async (caseNumber, businessId) => {
+  try {
+    // Look for escalation by case number and business - get full details for live chat
+    const escalation = await Escalation.findOne({ 
+      caseNumber: caseNumber,
+      businessId: businessId 
+    })
+    .select('_id caseNumber sessionId status customerName customerEmail')
+    .lean();
+    
+    if (!escalation) {
+      return null;
+    }
+    
+    // Return escalation details needed for live chat continuation
+    return {
+      escalationId: escalation._id,
+      caseNumber: escalation.caseNumber,
+      sessionId: escalation.sessionId,
+      status: escalation.status,
+      customerName: escalation.customerName,
+      customerEmail: escalation.customerEmail
+    };
+  } catch (error) {
+    console.error('Error fetching escalation for live chat:', error);
     return null;
   }
 };
@@ -658,8 +695,42 @@ Don't mention technical limitations.`;
         responseText = result.response.text();
       }
     } else if (escalationAnalysis.shouldEscalate) {
-      // Generate escalation response for explicit human requests
-      const escalationPrompt = `
+      // Check if this is a returning customer with a case number
+      const caseNumber = extractCaseNumber(query);
+      
+      if (caseNumber) {
+        // Returning customer - check if case exists
+        const existingCase = await getEscalationForLiveChat(caseNumber, business._id);
+        
+        if (existingCase) {
+          // Case found - continue existing session
+          const returningCustomerPrompt = `
+Customer with existing case wants to speak with a human.
+Business: ${business.name}
+Case Number: ${existingCase.caseNumber}
+Customer: ${existingCase.customerName}
+Query: "${query}"
+
+Generate a helpful response that:
+1. Acknowledges their case number and that they're a returning customer
+2. Confirms we found their case
+3. Explains they'll be connected to continue their conversation
+4. Includes this link: [click here to continue your case](escalate://continue?caseId=${existingCase.escalationId}&sessionId=${existingCase.sessionId})
+5. Keep it professional and welcoming
+
+Don't ask for their details again since we have them on file.`;
+
+          const escalationResponse = await model.generateContent(returningCustomerPrompt);
+          responseText = escalationResponse.response.text().trim();
+          escalationGenerated = true;
+        } else {
+          // Case not found
+          responseText = `I couldn't find case #${caseNumber} in our system. Please double-check the case number, or if you'd like to start a new case, [click here to speak with a representative](escalate://new).`;
+          escalationGenerated = true;
+        }
+      } else {
+        // New customer - regular escalation flow
+        const escalationPrompt = `
 User explicitly requested: "${query}"
 Business name: ${business.name}
 Escalation Score: ${escalationAnalysis.escalationScore}/100
@@ -668,14 +739,15 @@ Customer Intent: ${escalationAnalysis.intent}
 The customer wants to speak with a human. Generate a warm, helpful response that:
 1. Acknowledges their request professionally
 2. Asks for their name, email, and contact number if not already provided
-3. Includes this link at the end: [click here to speak with a representative](escalate://now)
+3. Includes this link at the end: [click here to speak with a representative](escalate://new)
 4. Reassures them that someone will help them soon
 
 Keep the tone professional and empathetic.`;
 
-      const escalationResponse = await model.generateContent(escalationPrompt);
-      responseText = escalationResponse.response.text().trim();
-      escalationGenerated = true;
+        const escalationResponse = await model.generateContent(escalationPrompt);
+        responseText = escalationResponse.response.text().trim();
+        escalationGenerated = true;
+      }
     } else {
       // Check if we have relevant data from any source
       const hasRelevantData = combinedData && combinedData.length > 0;
@@ -710,12 +782,12 @@ Keep the tone professional and empathetic.`;
         
         // Only suggest escalation for critical information or after multiple attempts
         if (escalationAnalysis.escalationTier === 'TIER_3') {
-          responseText += "\n\nIf you'd like to discuss this further with someone from our team, [click here to connect with a representative](escalate://now).";
+          responseText += "\n\nIf you'd like to discuss this further with someone from our team, [click here to connect with a representative](escalate://new).";
           escalationGenerated = true;
         } else if (escalationAnalysis.escalationTier === 'TIER_2' && 
                    (customerIntent === INTENT_TYPES.PRICING_INQUIRY || 
                     customerIntent === INTENT_TYPES.BOOKING_REQUEST)) {
-          responseText += " For specific details, feel free to [contact us directly](escalate://now).";
+          responseText += " For specific details, feel free to [contact us directly](escalate://new).";
           escalationGenerated = true;
         }
       }
@@ -795,12 +867,12 @@ Keep the tone professional and empathetic.`;
     
     if (error.message?.includes('quota')) {
       return res.status(503).json({ 
-        error: "Service temporarily unavailable. Please try again later or [contact support](escalate://now)." 
+        error: "Service temporarily unavailable. Please try again later or [contact support](escalate://new)." 
       });
     }
 
     res.status(500).json({ 
-      error: "I'm having trouble processing your request right now. Please try again or [contact support](escalate://now)." 
+      error: "I'm having trouble processing your request right now. Please try again or [contact support](escalate://new)." 
     });
   }
 };
