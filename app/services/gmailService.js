@@ -38,7 +38,7 @@ class GmailService {
       this.gmail = google.gmail({ version: 'v1', auth: this.auth });
       this.isInitialized = true;
       
-      console.log('Gmail service initialized successfully with environment credentials');
+      console.log('Gmail service initialized');
       return true;
     } catch (error) {
       console.error('Error initializing Gmail service:', error.message);

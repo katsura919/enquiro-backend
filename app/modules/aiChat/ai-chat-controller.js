@@ -9,351 +9,25 @@ const {
   fetchBusinessDataBySlug
 } = require("../../services/businessDataService");
 
+// Import fallback prompts
+const fallbackPrompts = require("./prompt");
+
+// Import chat utilities
+const {
+  calculateEscalationScore,
+  ESCALATION_TIERS,
+  calculateResponseConfidence,
+  getRecentHistory,
+  extractCaseNumber,
+  getEscalationCaseStatus,
+  getEscalationForLiveChat,
+  INTENT_TYPES,
+  CONVERSATION_STATES,
+  recognizeIntent,
+  getConversationState
+} = require("./chat-utils");
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// Escalation scoring system
-const ESCALATION_TIERS = {
-  TIER_1: { threshold: 25, action: 'handle_gracefully' },        // Missing information
-  TIER_2: { threshold: 50, action: 'suggest_alternatives' },    // Complex request
-  TIER_3: { threshold: 75, action: 'offer_escalation' },        // Frustrated customer
-  TIER_4: { threshold: 100, action: 'immediate_escalation' }    // Explicit human request
-};
-
-// Conversation states
-const CONVERSATION_STATES = {
-  GREETING: 'initial_contact',
-  INFORMATION_SEEKING: 'seeking_info',
-  PROBLEM_SOLVING: 'solving_issue',
-  ESCALATION_CONSIDERING: 'considering_escalation',
-  ESCALATION_REQUESTED: 'escalation_active',
-  SATISFIED: 'issue_resolved'
-};
-
-// Intent categories
-const INTENT_TYPES = {
-  INFORMATION_REQUEST: 'information_request',
-  COMPLAINT: 'complaint',
-  BOOKING_REQUEST: 'booking_request',
-  PRICING_INQUIRY: 'pricing_inquiry',
-  TECHNICAL_SUPPORT: 'technical_support',
-  ESCALATION_REQUEST: 'escalation_request',
-  CASE_FOLLOWUP: 'case_followup',
-  GREETING: 'greeting',
-  GENERAL_INQUIRY: 'general_inquiry'
-};
-
-// Calculate escalation score based on multiple factors
-const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
-  let score = 0;
-  const lowerQuery = query.toLowerCase();
-  
-  // Factor 1: Explicit human requests (+100 - immediate escalation)
-  const explicitKeywords = [
-    'speak to human', 'talk to person', 'escalate', 'supervisor', 
-    'manager', 'representative', 'agent', 'support team',
-    'talk to someone', 'human help', 'real person', 'human representative'
-  ];
-  
-  if (explicitKeywords.some(keyword => lowerQuery.includes(keyword))) {
-    score += 100;
-  }
-  
-  // Factor 2: Frustration indicators (+30-60)
-  const frustrationKeywords = [
-    { words: ['angry', 'furious', 'outraged'], weight: 60 },
-    { words: ['frustrated', 'annoyed', 'upset'], weight: 45 },
-    { words: ['disappointed', 'unsatisfied', 'unhappy'], weight: 30 },
-    { words: ['terrible', 'awful', 'horrible', 'worst'], weight: 50 },
-    { words: ['useless', 'pointless', 'waste of time'], weight: 55 }
-  ];
-  
-  frustrationKeywords.forEach(({ words, weight }) => {
-    if (words.some(word => lowerQuery.includes(word))) {
-      score += weight;
-    }
-  });
-  
-  // Factor 3: Repeated failed attempts (+20 per attempt)
-  const escalationAttempts = sessionData.escalationAttempts || 0;
-  score += escalationAttempts * 20;
-  
-  // Factor 4: Complex/urgent requests (+15-40)
-  const urgencyKeywords = [
-    { words: ['urgent', 'emergency', 'asap', 'immediately'], weight: 40 },
-    { words: ['important', 'critical', 'serious'], weight: 25 },
-    { words: ['complex', 'complicated', 'difficult'], weight: 15 }
-  ];
-  
-  urgencyKeywords.forEach(({ words, weight }) => {
-    if (words.some(word => lowerQuery.includes(word))) {
-      score += weight;
-    }
-  });
-  
-  // Factor 5: Conversation history context (+10-30)
-  if (recentHistory && recentHistory.length > 0) {
-    const customerMessages = recentHistory.filter(msg => msg.role === 'user');
-    const aiMessages = recentHistory.filter(msg => msg.role === 'assistant');
-    
-    // If customer keeps asking similar questions
-    if (customerMessages.length > 2) {
-      score += 15;
-    }
-    
-    // If AI has given "I don't know" responses multiple times
-    const unknownResponses = aiMessages.filter(msg => 
-      msg.content.toLowerCase().includes("don't have") || 
-      msg.content.toLowerCase().includes("don't know") ||
-      msg.content.toLowerCase().includes("not available")
-    );
-    
-    if (unknownResponses.length > 1) {
-      score += 25;
-    }
-  }
-  
-  // Factor 6: Missing critical information requests (+5-15)
-  const criticalInfoKeywords = [
-    'price', 'cost', 'appointment', 'booking', 'schedule', 
-    'availability', 'order', 'delivery', 'contact', 'phone', 'email'
-  ];
-  
-  if (criticalInfoKeywords.some(keyword => lowerQuery.includes(keyword))) {
-    score += 10;
-  }
-  
-  return Math.min(score, 100); // Cap at 100
-};
-
-// Recognize customer intent
-const recognizeIntent = (query, history = []) => {
-  const lowerQuery = query.toLowerCase();
-  
-  // Check for live chat request with case number (high priority - returning customer)
-  if (/speak to|talk to|human|agent|representative|manager|supervisor/.test(lowerQuery) && 
-      /case|ticket|reference|escalation/.test(lowerQuery)) {
-    return INTENT_TYPES.ESCALATION_REQUEST; // Treat as escalation but with existing case context
-  }
-  
-  // Case followup patterns (check before general escalation)
-  if (/case|ticket|reference|follow.*up|status.*case|case.*status|escalation.*number|case.*number/.test(lowerQuery) &&
-      !/speak to|talk to|human|agent|representative|manager|supervisor/.test(lowerQuery)) {
-    return INTENT_TYPES.CASE_FOLLOWUP;
-  }
-  
-  // Greeting patterns
-  if (/^(hi|hello|hey|good morning|good afternoon|good evening)/.test(lowerQuery)) {
-    return INTENT_TYPES.GREETING;
-  }
-  
-  // Escalation request patterns (new customers)
-  if (/speak to|talk to|human|agent|representative|manager|supervisor/.test(lowerQuery)) {
-    return INTENT_TYPES.ESCALATION_REQUEST;
-  }
-  
-  // Complaint patterns
-  if (/complaint|problem|issue|wrong|error|broken|not working|disappointed/.test(lowerQuery)) {
-    return INTENT_TYPES.COMPLAINT;
-  }
-  
-  // Booking patterns
-  if (/book|schedule|appointment|reserve|availability|available/.test(lowerQuery)) {
-    return INTENT_TYPES.BOOKING_REQUEST;
-  }
-  
-  // Pricing patterns
-  if (/price|cost|how much|fee|charge|payment/.test(lowerQuery)) {
-    return INTENT_TYPES.PRICING_INQUIRY;
-  }
-  
-  // Technical support patterns
-  if (/how to|help with|support|technical|setup|install|configure/.test(lowerQuery)) {
-    return INTENT_TYPES.TECHNICAL_SUPPORT;
-  }
-  
-  // Default to information request
-  return INTENT_TYPES.INFORMATION_REQUEST;
-};
-
-// Determine conversation state
-const getConversationState = (history, currentIntent, escalationScore) => {
-  if (history.length === 0) {
-    return CONVERSATION_STATES.GREETING;
-  }
-  
-  if (currentIntent === INTENT_TYPES.CASE_FOLLOWUP) {
-    return CONVERSATION_STATES.INFORMATION_SEEKING; // Use existing state for case followups
-  }
-  
-  if (currentIntent === INTENT_TYPES.ESCALATION_REQUEST || escalationScore >= 100) {
-    return CONVERSATION_STATES.ESCALATION_REQUESTED;
-  }
-  
-  if (escalationScore >= 75) {
-    return CONVERSATION_STATES.ESCALATION_CONSIDERING;
-  }
-  
-  if (currentIntent === INTENT_TYPES.COMPLAINT) {
-    return CONVERSATION_STATES.PROBLEM_SOLVING;
-  }
-  
-  return CONVERSATION_STATES.INFORMATION_SEEKING;
-};
-
-// Get recent conversation history
-const getRecentHistory = async (sessionId, limit = 6) => {
-  if (!sessionId) return [];
-  
-  const recentChats = await Chat.find({ sessionId })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .select('message senderType createdAt')
-    .lean();
-
-  // Map senderType to role for prompt context and add metadata
-  return recentChats.reverse().map(chat => {
-    let role;
-    if (chat.senderType === "customer") role = "user";
-    else if (chat.senderType === "ai") role = "assistant";
-    else role = chat.senderType; // fallback for agent, etc.
-    
-    return { 
-      role, 
-      content: chat.message,
-      timestamp: chat.createdAt,
-      senderType: chat.senderType
-    };
-  });
-};
-
-// Calculate response confidence score
-const calculateResponseConfidence = (query, foundData, historyContext = []) => {
-  let confidence = 0;
-  
-  // Factor 1: Data relevance (0-40 points)
-  if (foundData && foundData.length > 0) {
-    const queryWords = query.toLowerCase().split(/\s+/);
-    let relevanceScore = 0;
-    
-    foundData.forEach(item => {
-      const itemText = `${item.question || item.name || item.title || ''} ${item.answer || item.description || item.content || ''}`.toLowerCase();
-      const matchingWords = queryWords.filter(word => word.length > 2 && itemText.includes(word));
-      relevanceScore += (matchingWords.length / queryWords.length) * 10;
-    });
-    
-    confidence += Math.min(relevanceScore, 40);
-  }
-  
-  // Factor 2: Query complexity (0-20 points)
-  const queryLength = query.split(/\s+/).length;
-  if (queryLength <= 5) {
-    confidence += 20; // Simple queries are easier to handle
-  } else if (queryLength <= 10) {
-    confidence += 15;
-  } else {
-    confidence += 10; // Complex queries are harder
-  }
-  
-  // Factor 3: Context availability (0-25 points)
-  if (historyContext.length > 0) {
-    confidence += Math.min(historyContext.length * 5, 25);
-  }
-  
-  // Factor 4: Data quality (0-15 points)
-  if (foundData && foundData.length > 0) {
-    const hasCompleteData = foundData.some(item => 
-      (item.answer && item.answer.length > 50) ||
-      (item.description && item.description.length > 50) ||
-      (item.content && item.content.length > 50)
-    );
-    
-    if (hasCompleteData) {
-      confidence += 15;
-    } else {
-      confidence += 8;
-    }
-  }
-  
-  return Math.min(confidence, 100);
-};
-
-// Extract case number from query
-const extractCaseNumber = (query) => {
-  // Look for various case number patterns
-  const patterns = [
-    /case\s*#?\s*([A-Z0-9]{6,})/i,
-    /ticket\s*#?\s*([A-Z0-9]{6,})/i,
-    /reference\s*#?\s*([A-Z0-9]{6,})/i,
-    /escalation\s*#?\s*([A-Z0-9]{6,})/i,
-    /#([A-Z0-9]{6,})/i,
-    /([A-Z0-9]{8,})/i // Generic alphanumeric pattern for case numbers
-  ];
-  
-  for (const pattern of patterns) {
-    const match = query.match(pattern);
-    if (match) {
-      return match[1].toUpperCase();
-    }
-  }
-  
-  return null;
-};
-
-// Fetch escalation case status
-const getEscalationCaseStatus = async (caseNumber, businessId) => {
-  try {
-    // Look for escalation by case number and business - only fetch case number and status
-    const escalation = await Escalation.findOne({ 
-      caseNumber: caseNumber,
-      businessId: businessId 
-    })
-    .select('caseNumber status')
-    .lean();
-    
-    if (!escalation) {
-      return null;
-    }
-    
-    // Return only case number and status
-    return {
-      caseNumber: escalation.caseNumber,
-      status: escalation.status
-    };
-  } catch (error) {
-    console.error('Error fetching escalation case:', error);
-    return null;
-  }
-};
-
-// Fetch full escalation details for live chat continuation
-const getEscalationForLiveChat = async (caseNumber, businessId) => {
-  try {
-    // Look for escalation by case number and business - get full details for live chat
-    const escalation = await Escalation.findOne({ 
-      caseNumber: caseNumber,
-      businessId: businessId 
-    })
-    .select('_id caseNumber sessionId status customerName customerEmail')
-    .lean();
-    
-    if (!escalation) {
-      return null;
-    }
-    
-    // Return escalation details needed for live chat continuation
-    return {
-      escalationId: escalation._id,
-      caseNumber: escalation.caseNumber,
-      sessionId: escalation.sessionId,
-      status: escalation.status,
-      customerName: escalation.customerName,
-      customerEmail: escalation.customerEmail
-    };
-  } catch (error) {
-    console.error('Error fetching escalation for live chat:', error);
-    return null;
-  }
-};
 
 // Generate case status response
 const generateCaseStatusResponse = async (caseInfo, businessName, model) => {
@@ -409,100 +83,34 @@ IMPORTANT:
 const generateFallbackResponse = async (query, businessName, model, intent, confidence) => {
   let fallbackStrategy = '';
   
-  // Choose strategy based on intent and confidence
+  // Choose strategy based on intent, confidence, and available data capabilities
+  // Available data: Services (with pricing), Products (with pricing), Policies, FAQs
+  
   if (intent === INTENT_TYPES.PRICING_INQUIRY) {
-    fallbackStrategy = 'pricing_fallback';
+    // We have pricing data in Services and Products models
+    fallbackStrategy = 'pricing_available';
   } else if (intent === INTENT_TYPES.BOOKING_REQUEST) {
-    fallbackStrategy = 'booking_fallback';
+    // We have Services data but no booking/appointment system
+    fallbackStrategy = 'service_inquiry';
   } else if (intent === INTENT_TYPES.TECHNICAL_SUPPORT) {
-    fallbackStrategy = 'technical_fallback';
+    // Check if we have relevant FAQs or Policies for technical issues
+    fallbackStrategy = 'check_faq_policy';
   } else if (intent === INTENT_TYPES.CASE_FOLLOWUP) {
     fallbackStrategy = 'case_followup_fallback';
+  } else if (intent === INTENT_TYPES.INFORMATION_REQUEST) {
+    // We can handle general info about services, products, policies, FAQs
+    fallbackStrategy = 'general_info_available';
   } else if (confidence < 30) {
     fallbackStrategy = 'general_fallback';
   } else {
-    fallbackStrategy = 'related_topics';
+    fallbackStrategy = 'suggest_available_topics';
   }
   
-  const fallbackPrompts = {
-    pricing_fallback: `
-Customer asked about pricing: "${query}"
-Business: ${businessName}
-
-Generate a helpful response that:
-1. Acknowledges their pricing inquiry
-2. Explains that specific pricing may vary
-3. Suggests they contact the business for accurate quotes
-4. Offers to help with other general information
-5. Keep it friendly and helpful
-
-Don't mention missing data or limitations.`,
-
-    booking_fallback: `
-Customer asked about booking/appointments: "${query}"
-Business: ${businessName}
-
-Generate a helpful response that:
-1. Acknowledges their booking interest
-2. Suggests contacting the business directly for availability
-3. Offers to help with other information about services
-4. Keep it warm and encouraging
-
-Don't mention missing data or limitations.`,
-
-    technical_fallback: `
-Customer asked for technical help: "${query}"
-Business: ${businessName}
-
-Generate a helpful response that:
-1. Acknowledges their technical question
-2. Provides general guidance if possible
-3. Suggests contacting technical support for specific issues
-4. Offers to help with other questions
-5. Keep it supportive and solution-oriented
-
-Don't mention missing data or limitations.`,
-
-    case_followup_fallback: `
-Customer is asking about case status: "${query}"
-Business: ${businessName}
-
-Generate a helpful response that:
-1. Acknowledges their request to check case status
-2. Asks for their case number if they haven't provided one
-3. Explains case number format (usually 6+ characters)
-4. Assures them you'll help once you have the case number
-5. Keep it professional and supportive
-
-Don't mention database limitations.`,
-
-    general_fallback: `
-Customer asked: "${query}"
-Business: ${businessName}
-
-Generate a natural, helpful response that:
-1. Acknowledges their question warmly
-2. Explains you'd love to help but need more specific information
-3. Ask a clarifying question or suggest how they can get the exact info
-4. Offer to help with other topics
-5. Keep it conversational and helpful
-
-Don't mention missing data, databases, or technical limitations.`,
-
-    related_topics: `
-Customer asked: "${query}"
-Business: ${businessName}
-
-Generate a helpful response that:
-1. Acknowledges their question
-2. Suggests related topics or areas you might be able to help with
-3. Offers alternative ways to get their specific information
-4. Keep it positive and solution-focused
-
-Don't mention missing data or limitations.`
-  };
   
-  const prompt = fallbackPrompts[fallbackStrategy] || fallbackPrompts.general_fallback;
+  // Get the appropriate prompt function and generate the prompt text
+  const promptFunction = fallbackPrompts[fallbackStrategy] || fallbackPrompts.general_fallback;
+  const prompt = promptFunction(query, businessName);
+  
   const result = await model.generateContent(prompt);
   return result.response.text();
 };
