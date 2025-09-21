@@ -19,6 +19,7 @@ const productRoutes = require('./modules/product/product-routes');
 const agentRoutes = require('./modules/agent/agent-routes');  
 const queueRoutes = require('./modules/queue/queue-routes');
 const fileRoutes = require('./modules/file/file-routes');
+const chatbotSettingsRoutes = require('./modules/chatbot-settings/chatbot-settings-routes');
 
 const api = express.Router();
 
@@ -41,5 +42,6 @@ api.use('/product', productRoutes);
 api.use('/agent', agentRoutes);  
 api.use('/queue', queueRoutes);  
 api.use('/file', fileRoutes);  
+api.use('/chatbot-settings', chatbotSettingsRoutes);  
 
 module.exports = api;
