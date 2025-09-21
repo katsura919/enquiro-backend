@@ -212,19 +212,29 @@ const checkEscalationNeeded = async (query, recentHistory, model, sessionData = 
 
 // Helper function to generate escalation link based on live chat settings
 const getEscalationLink = (liveChatEnabled, linkType = 'new', params = {}) => {
+  console.log(`🔗 getEscalationLink called: liveChatEnabled=${liveChatEnabled}, linkType=${linkType}`, params);
+  
   if (liveChatEnabled) {
     // Live chat enabled - use existing escalate:// links
     if (linkType === 'continue') {
-      return `[click here to continue your case](escalate://continue?caseId=${params.caseId}&sessionId=${params.sessionId})`;
+      const link = `[click here to continue your case](escalate://continue?caseId=${params.caseId}&sessionId=${params.sessionId})`;
+      console.log('🔗 Generated live chat continue link:', link);
+      return link;
     } else {
-      return `[click here to speak with a representative](escalate://new)`;
+      const link = `[click here to speak with a representative](escalate://new)`;
+      console.log('🔗 Generated live chat new link:', link);
+      return link;
     }
   } else {
     // Live chat disabled - use form-only links
     if (linkType === 'continue') {
-      return `[click here to submit an update to your case](escalate://form?caseId=${params.caseId})`;
+      const link = `[click here to submit an update to your case](escalate://form?caseId=${params.caseId})`;
+      console.log('🔗 Generated form continue link:', link);
+      return link;
     } else {
-      return `[click here to submit your concern](escalate://form)`;
+      const link = `[click here to submit your concern](escalate://form)`;
+      console.log('🔗 Generated form new link:', link);
+      return link;
     }
   }
 };
@@ -371,7 +381,8 @@ Don't ask for their details again since we have them on file.`;
           responseText = escalationResponse.response.text().trim();
           escalationGenerated = true;
         } else {
-          // Case not found
+          // Case not found - add console logging for debugging
+          console.log(`🔍 Case lookup failed: Case #${caseNumber} not found for business ${business._id}`);
           responseText = `I couldn't find case #${caseNumber} in our system. Please double-check the case number, or if you'd like to start a new case, ${getEscalationLink(liveChatEnabled, 'new')}.`;
           escalationGenerated = true;
         }
