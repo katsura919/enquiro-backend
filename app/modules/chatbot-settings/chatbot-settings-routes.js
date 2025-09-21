@@ -1,7 +1,10 @@
 const express = require('express');
-const { getChatbotSettings, updateChatbotSettings } = require('./chatbot-settings-controller');
+const { createChatbotSettings, getChatbotSettings, updateChatbotSettings } = require('./chatbot-settings-controller');
 
 const router = express.Router();
+
+// POST /api/chatbot-settings - Create chatbot settings for a business
+router.post('/', createChatbotSettings);
 
 // GET /api/chatbot-settings/:businessId - Get chatbot settings for a business
 router.get('/:businessId', getChatbotSettings);

@@ -4,7 +4,7 @@ const Business = require('../../models/business-model');
 const Session = require('../../models/session-model');
 const Activity = require('../../models/activity-model');
 const Agent = require('../../models/agent-model');
-const { sendEscalationEmail } = require('../../services/escalationEmail');
+const ChatbotSettings = require('../../models/chatbot-settings-model');
 const mongoose = require('mongoose');
 
 // Helper function to generate a unique case number
@@ -36,6 +36,10 @@ const createEscalation = async (req, res) => {
       return res.status(404).json({ error: 'Session not found.' });
     }
 
+    // Check chatbot settings for live chat enablement
+    const chatbotSettings = await ChatbotSettings.findOne({ businessId });
+    const liveChatEnabled = chatbotSettings?.enableLiveChat !== false;
+
     const caseNumber = await generateUniqueCaseNumber();
 
     const escalation = new Escalation({ 
@@ -50,21 +54,34 @@ const createEscalation = async (req, res) => {
     });
     await escalation.save();
 
-    // Return plain object with _id included
-    res.status(201).json({
-      _id: escalation._id,
-      businessId: escalation.businessId,
-      sessionId: escalation.sessionId,
-      caseNumber: escalation.caseNumber,
-      customerName: escalation.customerName,
-      customerEmail: escalation.customerEmail,
-      customerPhone: escalation.customerPhone,
-      concern: escalation.concern,
-      description: escalation.description,
-      caseOwner: escalation.caseOwner,
-      createdAt: escalation.createdAt,
-      updatedAt: escalation.updatedAt
-    });
+    // Handle response based on live chat settings
+    if (liveChatEnabled) {
+      // Existing live chat flow - return escalation data for socket connection
+      res.status(201).json({
+        _id: escalation._id,
+        businessId: escalation.businessId,
+        sessionId: escalation.sessionId,
+        caseNumber: escalation.caseNumber,
+        customerName: escalation.customerName,
+        customerEmail: escalation.customerEmail,
+        customerPhone: escalation.customerPhone,
+        concern: escalation.concern,
+        description: escalation.description,
+        caseOwner: escalation.caseOwner,
+        createdAt: escalation.createdAt,
+        updatedAt: escalation.updatedAt,
+        enableLiveChat: true
+      });
+    } else {
+      // Form-only flow - return confirmation without email
+      res.status(201).json({
+        _id: escalation._id,
+        caseNumber: escalation.caseNumber,
+        enableLiveChat: false,
+        message: "Your support request has been submitted successfully. Our team will review it and get back to you.",
+        success: true
+      });
+    }
   } catch (err) {
     console.error('Error creating escalation:', err);
     res.status(500).json({ error: 'Server error.' });

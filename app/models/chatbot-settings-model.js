@@ -17,13 +17,16 @@ const chatbotSettingsSchema = new mongoose.Schema(
       type: String,
       default: "/default-chatbot-icon.svg",
     },
+    enableLiveChat: {
+      type: Boolean,
+      default: true, // Enable by default for existing businesses
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Index for efficient lookups
-chatbotSettingsSchema.index({ businessId: 1 });
+
 
 module.exports = mongoose.model('ChatbotSettings', chatbotSettingsSchema);

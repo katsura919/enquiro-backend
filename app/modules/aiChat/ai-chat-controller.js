@@ -3,6 +3,7 @@ const Chat = require("../../models/chat-model");
 const Session = require("../../models/session-model");
 const Business = require("../../models/business-model");
 const Escalation = require("../../models/escalation-model");
+const ChatbotSettings = require("../../models/chatbot-settings-model");
 
 // Import the business data service
 const { 
@@ -209,6 +210,34 @@ const checkEscalationNeeded = async (query, recentHistory, model, sessionData = 
   };
 };
 
+// Helper function to generate escalation link based on live chat settings
+const getEscalationLink = (liveChatEnabled, linkType = 'new', params = {}) => {
+  if (liveChatEnabled) {
+    // Live chat enabled - use existing escalate:// links
+    if (linkType === 'continue') {
+      return `[click here to continue your case](escalate://continue?caseId=${params.caseId}&sessionId=${params.sessionId})`;
+    } else {
+      return `[click here to speak with a representative](escalate://new)`;
+    }
+  } else {
+    // Live chat disabled - use form-only links
+    if (linkType === 'continue') {
+      return `[click here to submit an update to your case](escalate://form?caseId=${params.caseId})`;
+    } else {
+      return `[click here to submit your concern](escalate://form)`;
+    }
+  }
+};
+
+// Helper function to generate escalation message based on live chat settings
+const getEscalationMessage = (liveChatEnabled) => {
+  if (liveChatEnabled) {
+    return "You'll be connected with an available agent shortly.";
+  } else {
+    return "Please fill out the form to submit your request.";
+  }
+};
+
 const askAI = async (req, res) => {
   try {
     const { query, sessionId, customerDetails } = req.body;
@@ -228,6 +257,16 @@ const askAI = async (req, res) => {
     if (!business) {
       return res.status(404).json({ error: "Business not found" });
     }
+
+    // Get chatbot settings to check if live chat is enabled
+    const chatbotSettings = await ChatbotSettings.findOne({ businessId: business._id });
+    const liveChatEnabled = chatbotSettings?.enableLiveChat !== false;
+    
+    // Console log for debugging
+    console.log('🤖 Chatbot Settings for business:', business.name);
+    console.log('📋 Chatbot Settings Object:', chatbotSettings);
+    console.log('💬 Live Chat Enabled:', liveChatEnabled);
+    console.log('🔧 Raw enableLiveChat value:', chatbotSettings?.enableLiveChat);
 
     // Use business data for AI responses
     const combinedData = businessData || [];
@@ -323,7 +362,7 @@ Generate a helpful response that:
 1. Acknowledges their case number and that they're a returning customer
 2. Confirms we found their case
 3. Explains they'll be connected to continue their conversation
-4. Includes this link: [click here to continue your case](escalate://continue?caseId=${existingCase.escalationId}&sessionId=${existingCase.sessionId})
+4. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', { caseId: existingCase.escalationId, sessionId: existingCase.sessionId })}
 5. Keep it professional and welcoming
 
 Don't ask for their details again since we have them on file.`;
@@ -333,7 +372,7 @@ Don't ask for their details again since we have them on file.`;
           escalationGenerated = true;
         } else {
           // Case not found
-          responseText = `I couldn't find case #${caseNumber} in our system. Please double-check the case number, or if you'd like to start a new case, [click here to speak with a representative](escalate://new).`;
+          responseText = `I couldn't find case #${caseNumber} in our system. Please double-check the case number, or if you'd like to start a new case, ${getEscalationLink(liveChatEnabled, 'new')}.`;
           escalationGenerated = true;
         }
       } else {
@@ -347,8 +386,8 @@ Customer Intent: ${escalationAnalysis.intent}
 The customer wants to speak with a human. Generate a warm, helpful response that:
 1. Acknowledges their request professionally
 2. Asks for their name, email, and contact number if not already provided
-3. Includes this link at the end: [click here to speak with a representative](escalate://new)
-4. Reassures them that someone will help them soon
+3. Includes this link at the end: ${getEscalationLink(liveChatEnabled, 'new')}
+4. Reassures them that ${getEscalationMessage(liveChatEnabled)}
 
 Keep the tone professional and empathetic.`;
 
@@ -390,12 +429,12 @@ Keep the tone professional and empathetic.`;
         
         // Only suggest escalation for critical information or after multiple attempts
         if (escalationAnalysis.escalationTier === 'TIER_3') {
-          responseText += "\n\nIf you'd like to discuss this further with someone from our team, [click here to connect with a representative](escalate://new).";
+          responseText += `\n\nIf you'd like to discuss this further with someone from our team, ${getEscalationLink(liveChatEnabled, 'new')}.`;
           escalationGenerated = true;
         } else if (escalationAnalysis.escalationTier === 'TIER_2' && 
                    (customerIntent === INTENT_TYPES.PRICING_INQUIRY || 
                     customerIntent === INTENT_TYPES.BOOKING_REQUEST)) {
-          responseText += " For specific details, feel free to [contact us directly](escalate://new).";
+          responseText += ` For specific details, feel free to ${getEscalationLink(liveChatEnabled, 'new')}.`;
           escalationGenerated = true;
         }
       }
@@ -468,6 +507,17 @@ Keep the tone professional and empathetic.`;
   } catch (error) {
     console.error("Error in askAI:", error);
     
+    // Get chatbot settings for error messages (fallback to true if business not available)
+    let liveChatEnabled = true;
+    try {
+      if (business?._id) {
+        const chatbotSettings = await ChatbotSettings.findOne({ businessId: business._id });
+        liveChatEnabled = chatbotSettings?.enableLiveChat !== false;
+      }
+    } catch (settingsError) {
+      console.error("Error fetching chatbot settings for error message:", settingsError);
+    }
+    
     // Better error handling
     if (error.name === 'ValidationError') {
       return res.status(400).json({ error: "Invalid input data" });
@@ -475,12 +525,12 @@ Keep the tone professional and empathetic.`;
     
     if (error.message?.includes('quota')) {
       return res.status(503).json({ 
-        error: "Service temporarily unavailable. Please try again later or [contact support](escalate://new)." 
+        error: `Service temporarily unavailable. Please try again later or ${getEscalationLink(liveChatEnabled, 'new')}.` 
       });
     }
 
     res.status(500).json({ 
-      error: "I'm having trouble processing your request right now. Please try again or [contact support](escalate://new)." 
+      error: `I'm having trouble processing your request right now. Please try again or ${getEscalationLink(liveChatEnabled, 'new')}.` 
     });
   }
 };

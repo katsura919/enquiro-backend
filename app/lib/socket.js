@@ -3,6 +3,7 @@ const ChatQueue = require('../models/chat-queue-model');
 const AgentStatus = require('../models/agent-status-model');
 const Agent = require('../models/agent-model');
 const Escalation = require('../models/escalation-model');
+const ChatbotSettings = require('../models/chatbot-settings-model');
 const messageEvents = require('./socketEvents/messageEvents');
 const SystemMessageHelper = require('../utils/systemMessageHelper');
 
@@ -112,12 +113,24 @@ function setupSocket(server) {
     // Customer requests chat (escalation)
     socket.on('request_chat', async ({ businessId, escalationId }) => {
       try {
+        console.log(`[SOCKET] Customer requesting chat: businessId=${businessId}, escalationId=${escalationId}, socketId=${socket.id}`);
+
+        // Check if live chat is enabled for this business
+        const chatbotSettings = await ChatbotSettings.findOne({ businessId });
+        const liveChatEnabled = chatbotSettings?.enableLiveChat !== false;
+
+        if (!liveChatEnabled) {
+          socket.emit('chat_error', { 
+            message: 'Live chat is not available for this business. Your concern has been submitted and will be handled via email.',
+            type: 'live_chat_disabled'
+          });
+          return;
+        }
+
         socket.join(`queue_${businessId}`);
         joinedBusinessId = businessId;
         joinedEscalationId = escalationId;
         isCustomerConnection = true; 
-
-        console.log(`[SOCKET] Customer requesting chat: businessId=${businessId}, escalationId=${escalationId}, socketId=${socket.id}`);
 
         // Get escalation to find sessionId
         const escalation = await Escalation.findById(escalationId);
