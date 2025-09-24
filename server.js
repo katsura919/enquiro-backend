@@ -9,7 +9,8 @@ const api = require("./app/index");
 const setupSocket = require('./app/lib/socket');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increase payload limit for file uploads
+app.use(express.urlencoded({ limit: '10mb', extended: true })); // For form data
 app.use(corsMiddleware);
 
 // Connect to MongoDB first then start server
