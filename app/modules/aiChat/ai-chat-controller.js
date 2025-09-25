@@ -272,10 +272,7 @@ const askAI = async (req, res) => {
     const chatbotSettings = await ChatbotSettings.findOne({ businessId: business._id });
     const liveChatEnabled = chatbotSettings?.enableLiveChat !== false;
     
-    // Console log for debugging
-    console.log('🤖 Chatbot Settings for business:', business.name);
-    console.log('📋 Chatbot Settings Object:', chatbotSettings);
-    console.log('💬 Live Chat Enabled:', liveChatEnabled);
+
     console.log('🔧 Raw enableLiveChat value:', chatbotSettings?.enableLiveChat);
 
     // Use business data for AI responses
