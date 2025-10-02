@@ -66,7 +66,7 @@ const register = async (req, res) => {
     await user.save();
 
     // Send confirmation email
-    await sendConfirmationEmail(email, firstName, confirmationToken);
+    //await sendConfirmationEmail(email, firstName, confirmationToken);
 
     res.status(201).json({
       message: "Registration successful. Please check your email to confirm your account.",
