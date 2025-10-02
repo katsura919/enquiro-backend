@@ -21,6 +21,7 @@ const agentRatingRoutes = require('./modules/agent-rating/agent-rating-route');
 const queueRoutes = require('./modules/queue/queue-routes');
 const fileRoutes = require('./modules/file/file-routes');
 const chatbotSettingsRoutes = require('./modules/chatbot-settings/chatbot-settings-routes');
+const qrSettingsRoutes = require('./modules/qr-settings/qr-settings-routes');
 
 const api = express.Router();
 
@@ -45,5 +46,6 @@ api.use('/agent-rating', agentRatingRoutes);
 api.use('/queue', queueRoutes);  
 api.use('/file', fileRoutes);  
 api.use('/chatbot-settings', chatbotSettingsRoutes);  
+api.use('/qr-settings', qrSettingsRoutes);  
 
 module.exports = api;
