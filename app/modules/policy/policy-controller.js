@@ -27,23 +27,51 @@ const createPolicy = async (req, res) => {
   }
 };
 
-// Get all Policies for a business
+// Get all Policies for a business with optional filters, search, and pagination
 const getPolicies = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const { type, isActive } = req.query;
-
-    let filter = { businessId };
+    const { type, isActive, search, page = 1, limit = 10 } = req.query;
+    const query = { businessId };
     
-    if (type) filter.type = type;
-    if (isActive !== undefined) filter.isActive = isActive === 'true';
-
-    const policies = await Policy.find(filter).sort({ createdAt: -1 });
+    // Add type filter
+    if (type && type !== 'all') {
+      query.type = type;
+    }
+    
+    // Add isActive filter
+    if (isActive !== undefined) {
+      query.isActive = isActive === 'true';
+    }
+    
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i'); // Case-insensitive search
+      query.$or = [
+        { title: searchRegex },
+        { content: searchRegex },
+        { type: searchRegex },
+        { tags: { $in: [searchRegex] } }
+      ];
+    }
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const policies = await Policy.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    const total = await Policy.countDocuments(query);
     
     res.json({ 
-      success: true, 
-      count: policies.length,
-      policies 
+      success: true,
+      policies,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      searchTerm: search || null, // Include search term in response for frontend reference
+      type: type || null,
+      isActive: isActive !== undefined ? (isActive === 'true') : null
     });
   } catch (error) {
     res.status(500).json({ 
