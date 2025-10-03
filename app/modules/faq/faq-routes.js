@@ -6,18 +6,14 @@ const {
   getFAQById, 
   updateFAQ, 
   deleteFAQ, 
-  searchFAQs, 
   getFAQCategories 
 } = require('./faq-controller');
 
 // Create new FAQ
 router.post('/', createFAQ);
 
-// Get all FAQs for a business (with optional filters)
+// Get all FAQs for a business (with optional filters, search, and pagination)
 router.get('/business/:businessId', getFAQs);
-
-// Search FAQs
-router.get('/business/:businessId/search', searchFAQs);
 
 // Get FAQ categories for a business
 router.get('/business/:businessId/categories', getFAQCategories);

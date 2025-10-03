@@ -27,23 +27,51 @@ const createFAQ = async (req, res) => {
   }
 };
 
-// Get all FAQs for a business
+// Get all FAQs for a business with optional filters, search, and pagination
 const getFAQs = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const { category, isActive } = req.query;
-
-    let filter = { businessId };
+    const { category, isActive, search, page = 1, limit = 10 } = req.query;
+    const query = { businessId };
     
-    if (category) filter.category = category;
-    if (isActive !== undefined) filter.isActive = isActive === 'true';
-
-    const faqs = await FAQ.find(filter).sort({ createdAt: -1 });
+    // Add category filter
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+    
+    // Add isActive filter
+    if (isActive !== undefined) {
+      query.isActive = isActive === 'true';
+    }
+    
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i'); // Case-insensitive search
+      query.$or = [
+        { question: searchRegex },
+        { answer: searchRegex },
+        { category: searchRegex },
+        { tags: { $in: [searchRegex] } }
+      ];
+    }
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const faqs = await FAQ.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    const total = await FAQ.countDocuments(query);
     
     res.json({ 
-      success: true, 
-      count: faqs.length,
-      faqs 
+      success: true,
+      faqs,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      searchTerm: search || null, // Include search term in response for frontend reference
+      category: category || null,
+      isActive: isActive !== undefined ? (isActive === 'true') : null
     });
   } catch (error) {
     res.status(500).json({ 
@@ -137,36 +165,7 @@ const deleteFAQ = async (req, res) => {
   }
 };
 
-// Search FAQs
-const searchFAQs = async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    const { query } = req.query;
 
-    const faqs = await FAQ.find({
-      businessId,
-      isActive: true,
-      $or: [
-        { question: { $regex: query, $options: 'i' } },
-        { answer: { $regex: query, $options: 'i' } },
-        { category: { $regex: query, $options: 'i' } },
-        { tags: { $in: [new RegExp(query, 'i')] } }
-      ]
-    }).sort({ createdAt: -1 });
-
-    res.json({ 
-      success: true, 
-      count: faqs.length,
-      query: query.trim(),
-      faqs 
-    });
-  } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-};
 
 // Get FAQ categories for a business
 const getFAQCategories = async (req, res) => {
@@ -196,6 +195,5 @@ module.exports = {
   getFAQById,
   updateFAQ,
   deleteFAQ,
-  searchFAQs,
   getFAQCategories,
 };
