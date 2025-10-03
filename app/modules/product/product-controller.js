@@ -29,30 +29,61 @@ const createProduct = async (req, res) => {
   }
 };
 
-// Get all Products for a business
+// Get all Products for a business with optional filters, search, and pagination
 const getProducts = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const { category, isActive, inStock } = req.query;
-
-    let filter = { businessId };
+    const { category, isActive, inStock, search, page = 1, limit = 10 } = req.query;
+    const query = { businessId };
     
-    if (category) filter.category = category;
-    if (isActive !== undefined) filter.isActive = isActive === 'true';
+    // Add category filter
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+    
+    // Add isActive filter
+    if (isActive !== undefined) {
+      query.isActive = isActive === 'true';
+    }
+    
+    // Add inStock filter
     if (inStock !== undefined) {
       if (inStock === 'true') {
-        filter.quantity = { $gt: 0 };
+        query.quantity = { $gt: 0 };
       } else if (inStock === 'false') {
-        filter.quantity = 0;
+        query.quantity = 0;
       }
     }
+    
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i'); // Case-insensitive search
+      query.$or = [
+        { name: searchRegex },
+        { description: searchRegex },
+        { category: searchRegex },
+        { sku: searchRegex }
+      ];
+    }
 
-    const products = await Product.find(filter).sort({ createdAt: -1 });
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const products = await Product.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    const total = await Product.countDocuments(query);
     
     res.json({ 
-      success: true, 
-      count: products.length,
-      products 
+      success: true,
+      products,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      searchTerm: search || null, // Include search term in response for frontend reference
+      category: category || null,
+      isActive: isActive !== undefined ? (isActive === 'true') : null,
+      inStock: inStock || null
     });
   } catch (error) {
     res.status(500).json({ 
