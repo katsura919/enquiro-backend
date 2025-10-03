@@ -28,24 +28,56 @@ const createService = async (req, res) => {
   }
 };
 
-// Get all Services for a business
+// Get all Services for a business with optional filters, search, and pagination
 const getServices = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const { category, isActive, pricingType } = req.query;
-
-    let filter = { businessId };
+    const { category, isActive, pricingType, search, page = 1, limit = 10 } = req.query;
+    const query = { businessId };
     
-    if (category) filter.category = category;
-    if (isActive !== undefined) filter.isActive = isActive === 'true';
-    if (pricingType) filter['pricing.type'] = pricingType;
+    // Add category filter
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+    
+    // Add isActive filter
+    if (isActive !== undefined) {
+      query.isActive = isActive === 'true';
+    }
+    
+    // Add pricingType filter
+    if (pricingType) {
+      query['pricing.type'] = pricingType;
+    }
+    
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i'); // Case-insensitive search
+      query.$or = [
+        { name: searchRegex },
+        { description: searchRegex },
+        { category: searchRegex }
+      ];
+    }
 
-    const services = await Service.find(filter).sort({ createdAt: -1 });
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const services = await Service.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    const total = await Service.countDocuments(query);
     
     res.json({ 
-      success: true, 
-      count: services.length,
-      services 
+      success: true,
+      services,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      searchTerm: search || null, // Include search term in response for frontend reference
+      category: category || null,
+      isActive: isActive !== undefined ? (isActive === 'true') : null,
+      pricingType: pricingType || null
     });
   } catch (error) {
     res.status(500).json({ 
