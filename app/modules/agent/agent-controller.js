@@ -110,13 +110,61 @@ const restoreAgent = async (req, res) => {
 const getAgentsByBusiness = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const filter = { 
-      businessId: businessId,
-      deletedAt: null 
-    };
+    const { search, page = 1, limit = 10 } = req.query;
     
-    const agents = await Agent.find(filter).select('-password');
-    res.json(agents);
+    // Parse pagination parameters
+    const pageNumber = parseInt(page);
+    const limitNumber = parseInt(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+    
+    // Build query using the model's notDeleted helper
+    let query = Agent.find().notDeleted().where({ businessId: businessId });
+    
+    // Add search functionality
+    if (search) {
+      const searchRegex = { $regex: search, $options: 'i' };
+      query = query.where({
+        $or: [
+          { name: searchRegex },
+          { email: searchRegex }
+        ]
+      });
+    }
+    
+    // Get total count for pagination (filtered results)
+    const totalQuery = query.clone();
+    const total = await totalQuery.countDocuments();
+    
+    // Get total count of all non-deleted agents for this business
+    const totalAgentsInBusiness = await Agent.find()
+      .notDeleted()
+      .where({ businessId: businessId })
+      .countDocuments();
+    
+    // Apply pagination and exclude password
+    const agents = await query
+      .select('-password')
+      .skip(skip)
+      .limit(limitNumber)
+      .sort({ createdAt: -1 });
+    
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / limitNumber);
+    const hasNextPage = pageNumber < totalPages;
+    const hasPrevPage = pageNumber > 1;
+    
+    res.json({
+      agents,
+      pagination: {
+        currentPage: pageNumber,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: limitNumber,
+        hasNextPage,
+        hasPrevPage
+      },
+      totalAgentsInBusiness
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
