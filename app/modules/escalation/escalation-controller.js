@@ -117,7 +117,8 @@ const getEscalationsByBusiness = async (req, res) => {
     const escalations = await Escalation.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .populate('caseOwner', 'name');
     const total = await Escalation.countDocuments(query);
     res.json({
       escalations,
@@ -137,7 +138,9 @@ const getEscalationsByBusiness = async (req, res) => {
 const getEscalationsBySession = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const escalations = await Escalation.find({ sessionId }).sort({ createdAt: -1 });
+    const escalations = await Escalation.find({ sessionId })
+      .sort({ createdAt: -1 })
+      .populate('caseOwner', 'name');
     res.json(escalations);
   } catch (err) {
     console.error('Error fetching escalations by session:', err);
@@ -169,7 +172,7 @@ const getEscalationsByCaseOwner = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('caseOwner', 'name email phone');
+      .populate('caseOwner', 'name');
       
     const total = await Escalation.countDocuments(query);
     
@@ -203,7 +206,7 @@ const getEscalationsByCaseOwner = async (req, res) => {
 const getEscalationById = async (req, res) => {
   try {
     const { id } = req.params;
-    const escalation = await Escalation.findById(id).populate('caseOwner', 'name email phone');
+    const escalation = await Escalation.findById(id).populate('caseOwner', 'name');
     if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
     res.json(escalation);
   } catch (err) {
@@ -301,7 +304,7 @@ const updateCaseOwner = async (req, res) => {
       id,
       { caseOwner: caseOwnerValue },
       { new: true, runValidators: true }
-    ).populate('caseOwner', 'name email phone');
+    ).populate('caseOwner', 'name');
     
     if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
     
