@@ -145,6 +145,60 @@ const getEscalationsBySession = async (req, res) => {
   }
 };
 
+// Get all escalations for a specific case owner (agent)
+const getEscalationsByCaseOwner = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { status, page = 1, limit = 10 } = req.query;
+    
+    // Verify agent exists
+    const agent = await Agent.findById(agentId);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found.' });
+    }
+    
+    const query = { caseOwner: agentId };
+    
+    // Add status filter if provided
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const escalations = await Escalation.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate('caseOwner', 'name email phone');
+      
+    const total = await Escalation.countDocuments(query);
+    
+    // Get total case counts for this agent (all cases regardless of status filter)
+    const totalCases = await Escalation.countDocuments({ caseOwner: agentId });
+    const totalResolvedCases = await Escalation.countDocuments({ 
+      caseOwner: agentId, 
+      status: 'resolved' 
+    });
+    
+    res.json({
+      escalations,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      agentId,
+      status: status || 'all',
+      counts: {
+        totalCases,
+        totalResolvedCases
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching escalations by case owner:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
 // Get one escalation by ID
 const getEscalationById = async (req, res) => {
   try {
@@ -317,6 +371,7 @@ module.exports = {
   createEscalation, 
   getEscalationsByBusiness, 
   getEscalationsBySession, 
+  getEscalationsByCaseOwner,
   getEscalationById, 
   updateEscalation, 
   deleteEscalation, 

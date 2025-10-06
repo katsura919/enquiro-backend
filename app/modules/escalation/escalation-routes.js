@@ -35,6 +35,18 @@ router.get('/session/:sessionId',
     escalationController.getEscalationsBySession
 );
 
+// Get all escalations for a case owner (agent)
+router.get('/agent/:agentId', 
+    authMiddleware,
+    [
+        param('agentId')
+            .isMongoId()
+            .withMessage('Valid agent ID is required')
+    ],
+    handleValidationErrors,
+    escalationController.getEscalationsByCaseOwner
+);
+
 // Get an escalation by ID
 router.get('/:id', 
     authMiddleware,
