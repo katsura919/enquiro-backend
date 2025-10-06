@@ -237,13 +237,70 @@ const getRatingsBySession = async (req, res) => {
   }
 };
 
+// Get ratings by agent
+const getRatingsByAgent = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+    
+    const skip = (page - 1) * limit;
+    
+    const ratings = await AgentRating.find({ agentId })
+      .populate('businessId', 'name')
+      .populate('sessionId', 'sessionId')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await AgentRating.countDocuments({ agentId });
+
+    // Calculate average rating for this agent
+    const mongoose = require('mongoose');
+    const avgResult = await AgentRating.aggregate([
+      { $match: { agentId: new mongoose.Types.ObjectId(agentId) } },
+      {
+        $group: {
+          _id: null,
+          averageRating: { $avg: '$rating' },
+          totalRatings: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const stats = avgResult.length > 0 
+      ? { 
+          averageRating: Math.round(avgResult[0].averageRating * 10) / 10, 
+          totalRatings: avgResult[0].totalRatings 
+        }
+      : { averageRating: 0, totalRatings: 0 };
+
+    res.json({
+      success: true,
+      data: ratings,
+      stats,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+};
+
 // Get rating distribution for business
 const getRatingDistribution = async (req, res) => {
   try {
     const { businessId } = req.params;
+    const mongoose = require('mongoose');
     
     const distribution = await AgentRating.aggregate([
-      { $match: { businessId: require('mongoose').Types.ObjectId(businessId) } },
+      { $match: { businessId: new mongoose.Types.ObjectId(businessId) } },
       {
         $group: {
           _id: '$rating',
@@ -283,5 +340,6 @@ module.exports = {
   getAgentAverageRating,
   getBusinessRatingStats,
   getRatingsBySession,
+  getRatingsByAgent,
   getRatingDistribution
 };

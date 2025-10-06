@@ -20,6 +20,9 @@ router.get('/business/:businessId/distribution', agentRatingController.getRating
 // Get ratings by session
 router.get('/session/:sessionId', agentRatingController.getRatingsBySession);
 
+// Get ratings by agent
+router.get('/agent/:agentId', agentRatingController.getRatingsByAgent);
+
 // Get rating by ID
 router.get('/:id', agentRatingController.getRatingById);
 
