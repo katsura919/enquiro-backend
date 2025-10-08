@@ -5,6 +5,7 @@ const businessController = require('./business-controller');
 const authMiddleware = require('../../middleware/authMiddleware');
 const { createBusinessValidation, updateBusinessValidation } = require('../../utils/validation/businessValidation');
 const handleValidationErrors = require('../../utils/validation/validationErrorHandler');
+const { upload } = require('../../services/fileUploadService');
 
 // Create a business
 router.post('/', 
@@ -22,6 +23,13 @@ router.get('/',
 // Get business by slug
 router.get('/slug/:slug', 
     businessController.getBusinessBySlug);
+
+// Upload business logo
+router.post('/:id/logo',
+    authMiddleware,
+    upload.single('logo'),
+    businessController.uploadLogo
+);
 
 // Get a business by ID
 router.get('/:id', 
