@@ -12,6 +12,12 @@ router.get('/info',
     userController.getUserInfoByToken
 );
 
+// Change user password
+router.post('/change-password', 
+    authMiddleware,
+    userController.changePassword
+);
+
 // Create a user
 router.post('/', 
     authMiddleware,

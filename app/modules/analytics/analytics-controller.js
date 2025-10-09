@@ -1,5 +1,7 @@
 const AgentRating = require('../../models/agent-rating-model');
 const Escalation = require('../../models/escalation-model');
+const Session = require('../../models/session-model');
+const Agent = require('../../models/agent-model');
 const mongoose = require('mongoose');
 
 // Get average rating for a specific business
@@ -266,8 +268,73 @@ const getEscalationsPerDay = async (req, res) => {
   }
 };
 
+// Get total sessions count for a specific business
+const getSessionsCount = async (req, res) => {
+  try {
+    const { businessId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid business ID'
+      });
+    }
+
+    const sessionsCount = await Session.countDocuments({
+      businessId: new mongoose.Types.ObjectId(businessId)
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sessionsCount
+      },
+      message: 'Sessions count retrieved successfully'
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+
+// Get total agents count for a specific business (excluding soft deleted)
+const getAgentsCount = async (req, res) => {
+  try {
+    const { businessId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid business ID'
+      });
+    }
+
+    const agentsCount = await Agent.countDocuments({
+      businessId: new mongoose.Types.ObjectId(businessId),
+      deletedAt: null // Exclude soft deleted agents
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        agentsCount
+      },
+      message: 'Agents count retrieved successfully'
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+
 module.exports = {
   getBusinessAverageRating,
   getEscalatedCount,
-  getEscalationsPerDay
+  getEscalationsPerDay,
+  getSessionsCount,
+  getAgentsCount
 };

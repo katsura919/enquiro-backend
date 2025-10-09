@@ -11,4 +11,10 @@ router.get('/escalations/:businessId/count', analyticsController.getEscalatedCou
 // Get escalations count per day for chart visualization
 router.get('/escalations/:businessId/per-day', analyticsController.getEscalationsPerDay);
 
+// Get total sessions count for a specific business
+router.get('/sessions/:businessId/count', analyticsController.getSessionsCount);
+
+// Get total agents count for a specific business
+router.get('/agents/:businessId/count', analyticsController.getAgentsCount);
+
 module.exports = router;
