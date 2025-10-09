@@ -23,6 +23,7 @@ const queueRoutes = require('./modules/queue/queue-routes');
 const fileRoutes = require('./modules/file/file-routes');
 const chatbotSettingsRoutes = require('./modules/chatbot-settings/chatbot-settings-routes');
 const qrSettingsRoutes = require('./modules/qr-settings/qr-settings-routes');
+const notificationRoutes = require('./modules/notification/notification-routes');
 
 const api = express.Router();
 
@@ -49,5 +50,6 @@ api.use('/queue', queueRoutes);
 api.use('/file', fileRoutes);  
 api.use('/chatbot-settings', chatbotSettingsRoutes);  
 api.use('/qr-settings', qrSettingsRoutes);  
+api.use('/notifications', notificationRoutes);
 
 module.exports = api;

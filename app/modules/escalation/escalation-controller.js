@@ -5,6 +5,8 @@ const Session = require('../../models/session-model');
 const Activity = require('../../models/activity-model');
 const Agent = require('../../models/agent-model');
 const ChatbotSettings = require('../../models/chatbot-settings-model');
+const notificationService = require('../../services/notificationService');
+const { emitNotification } = require('../../lib/socketEvents/notif-socket');
 const mongoose = require('mongoose');
 
 // Helper function to generate a unique case number
@@ -53,6 +55,29 @@ const createEscalation = async (req, res) => {
       description
     });
     await escalation.save();
+
+    // Create notification for business owner
+    try {
+      const notification = await notificationService.createCaseNotification({
+        businessId,
+        caseId: escalation._id,
+        caseTitle: concern,
+        casePriority: escalation.priority || 'medium',
+        customerId: sessionExists._id,
+        customerName,
+        agentId: null,
+        agentName: 'System'
+      });
+
+      // Emit notification via socket
+      const io = req.app.get('io');
+      if (io) {
+        emitNotification(io, businessId, notification);
+      }
+    } catch (notifError) {
+      console.error('Error creating case notification:', notifError);
+      // Don't fail the request if notification fails
+    }
 
     // Handle response based on live chat settings
     if (liveChatEnabled) {

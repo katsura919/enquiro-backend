@@ -1,4 +1,9 @@
 const AgentRating = require('../../models/agent-rating-model');
+const Business = require('../../models/business-model');
+const Session = require('../../models/session-model');
+const Agent = require('../../models/agent-model');
+const notificationService = require('../../services/notificationService');
+const { emitNotification } = require('../../lib/socketEvents/notif-socket');
 
 // Create a new agent rating
 const createAgentRating = async (req, res) => {
@@ -8,6 +13,33 @@ const createAgentRating = async (req, res) => {
     
     // Populate referenced fields for response
     await rating.populate('businessId sessionId agentId');
+
+    // Create notification for business owner
+    try {
+      const agent = await Agent.findById(rating.agentId);
+      const session = await Session.findById(rating.sessionId);
+
+      if (agent) {
+        const notification = await notificationService.createRatingNotification({
+          businessId: rating.businessId,
+          ratingId: rating._id,
+          rating: rating.rating,
+          ratedAgentId: agent._id,
+          ratedAgentName: agent.name,
+          customerName: session?.customerName || 'Customer',
+          feedback: rating.feedback || ''
+        });
+
+        // Emit notification via socket
+        const io = req.app ? req.app.get('io') : null;
+        if (io) {
+          emitNotification(io, rating.businessId, notification);
+        }
+      }
+    } catch (notifError) {
+      console.error('Error creating rating notification:', notifError);
+      // Don't fail the request if notification fails
+    }
     
     res.status(201).json({
       success: true,

@@ -5,6 +5,7 @@ const Agent = require('../models/agent-model');
 const Escalation = require('../models/escalation-model');
 const ChatbotSettings = require('../models/chatbot-settings-model');
 const messageEvents = require('./socketEvents/messageEvents');
+const { attachNotificationHandlers } = require('./socketEvents/notif-socket');
 const SystemMessageHelper = require('../utils/systemMessageHelper');
 
 function setupSocket(server) {
@@ -24,6 +25,9 @@ function setupSocket(server) {
     let isCustomerConnection = false; // Track if this is a customer connection
 
     console.log(`[SOCKET] New connection: ${socket.id}`);
+
+    // Attach notification handlers to this socket
+    attachNotificationHandlers(socket);
 
     // Admin/Dashboard joins business status room for monitoring
     socket.on('join_business_status', ({ businessId }) => {
