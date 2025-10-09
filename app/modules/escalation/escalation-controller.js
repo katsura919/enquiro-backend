@@ -72,7 +72,8 @@ const createEscalation = async (req, res) => {
       // Emit notification via socket
       const io = req.app.get('io');
       if (io) {
-        emitNotification(io, businessId, notification);
+        emitNotification(io, businessId.toString(), notification);
+        console.log('[ESCALATION] Notification emitted for business:', businessId.toString());
       }
     } catch (notifError) {
       console.error('Error creating case notification:', notifError);

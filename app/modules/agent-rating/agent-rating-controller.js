@@ -11,6 +11,9 @@ const createAgentRating = async (req, res) => {
     const rating = new AgentRating(req.body);
     await rating.save();
     
+    // Save businessId as string before populating
+    const businessIdString = rating.businessId.toString();
+    
     // Populate referenced fields for response
     await rating.populate('businessId sessionId agentId');
 
@@ -21,7 +24,7 @@ const createAgentRating = async (req, res) => {
 
       if (agent) {
         const notification = await notificationService.createRatingNotification({
-          businessId: rating.businessId,
+          businessId: businessIdString,
           ratingId: rating._id,
           rating: rating.rating,
           ratedAgentId: agent._id,
@@ -31,9 +34,10 @@ const createAgentRating = async (req, res) => {
         });
 
         // Emit notification via socket
-        const io = req.app ? req.app.get('io') : null;
+        const io = req.app.get('io');
         if (io) {
-          emitNotification(io, rating.businessId, notification);
+          emitNotification(io, businessIdString, notification);
+          console.log('[RATING] Notification emitted for business:', businessIdString);
         }
       }
     } catch (notifError) {

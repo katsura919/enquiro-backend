@@ -61,7 +61,8 @@ const createRatingNotification = async ({
     });
 
     await notification.save();
-    return notification;
+    console.log('[NOTIFICATION-SERVICE] Rating notification saved:', notification._id);
+    return notification.toObject(); // Convert to plain object
   } catch (error) {
     console.error('Error creating rating notification:', error);
     throw error;

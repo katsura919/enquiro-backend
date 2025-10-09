@@ -84,8 +84,10 @@ const attachNotificationHandlers = (socket) => {
  */
 const emitNotification = (io, businessId, notification) => {
   const roomName = `notifications_${businessId}`;
+  console.log(`[NOTIF-SOCKET] Emitting notification to room: ${roomName}`);
+  console.log(`[NOTIF-SOCKET] Notification type: ${notification.type}`);
+  console.log(`[NOTIF-SOCKET] Notification data:`, JSON.stringify(notification, null, 2));
   io.to(roomName).emit('new_notification', notification);
-  console.log(`Notification emitted to room: ${roomName}`);
 };
 
 /**
