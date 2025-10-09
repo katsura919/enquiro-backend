@@ -17,4 +17,7 @@ router.get('/sessions/:businessId/count', analyticsController.getSessionsCount);
 // Get total agents count for a specific business
 router.get('/agents/:businessId/count', analyticsController.getAgentsCount);
 
+// Get ratings distribution (1-5 stars) for a specific business
+router.get('/ratings/:businessId/distribution', analyticsController.getRatingsDistribution);
+
 module.exports = router;

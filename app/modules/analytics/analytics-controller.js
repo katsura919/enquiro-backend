@@ -331,10 +331,75 @@ const getAgentsCount = async (req, res) => {
   }
 };
 
+// Get ratings distribution (1-5 stars) for a business
+const getRatingsDistribution = async (req, res) => {
+  try {
+    const { businessId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid business ID'
+      });
+    }
+
+    const distribution = await AgentRating.aggregate([
+      { 
+        $match: { 
+          businessId: new mongoose.Types.ObjectId(businessId) 
+        } 
+      },
+      {
+        $group: {
+          _id: '$rating',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      }
+    ]);
+
+    // Create array with all ratings from 1-5, defaulting to 0 if no data
+    const ratingsMap = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0
+    };
+
+    distribution.forEach(item => {
+      if (item._id >= 1 && item._id <= 5) {
+        ratingsMap[item._id] = item.count;
+      }
+    });
+
+    const result = Object.keys(ratingsMap).map(rating => ({
+      rating: parseInt(rating),
+      count: ratingsMap[rating]
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        distribution: result
+      },
+      message: 'Ratings distribution retrieved successfully'
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+
 module.exports = {
   getBusinessAverageRating,
   getEscalatedCount,
   getEscalationsPerDay,
   getSessionsCount,
-  getAgentsCount
+  getAgentsCount,
+  getRatingsDistribution
 };
