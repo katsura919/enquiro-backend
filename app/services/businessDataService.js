@@ -12,36 +12,52 @@ const { searchMultipleCollections } = require("./queryProcessingService");
  * @returns {Object} - Business and all related data
  */
 const fetchBusinessDataBySlug = async (slug, query = null) => {
+  console.log('🔍 fetchBusinessDataBySlug called with slug:', slug, 'query:', query);
+  
   const business = await Business.findOne({ slug }).lean();
-  if (!business) return { business: null, allData: null };
+  if (!business) {
+    console.log('❌ Business not found for slug:', slug);
+    return { business: null, allData: null };
+  }
+  
+  console.log('✅ Business found:', business.name, 'ID:', business._id);
 
   if (!query) {
+    console.log('📋 No query provided - fetching recent data from all collections');
     // If no query, fetch recent data from all collections
     const [faqs, policies, products, services] = await Promise.all([
-      FAQ.find({ businessId: business._id })
+      FAQ.find({ businessId: business._id, isActive: true })
         .sort({ createdAt: -1 })
-        .select('question answer category')
-        .limit(2)
+        .select('question answer category tags')
+        .limit(5)
         .lean(),
       
-      Policy.find({ businessId: business._id })
+      Policy.find({ businessId: business._id, isActive: true })
         .sort({ createdAt: -1 })
-        .select('title content type')
-        .limit(2)
+        .select('title content type tags')
+        .limit(5)
         .lean(),
       
-      Product.find({ businessId: business._id })
+      Product.find({ businessId: business._id, isActive: true })
         .sort({ createdAt: -1 })
-        .select('name description price category')
-        .limit(2)
+        .select('name description price category sku quantity')
+        .limit(5)
         .lean(),
       
-      Service.find({ businessId: business._id })
+      Service.find({ businessId: business._id, isActive: true })
         .sort({ createdAt: -1 })
-        .select('name description price duration')
-        .limit(2)
+        .select('name description pricing duration category')
+        .limit(5)
         .lean()
     ]);
+
+    console.log('📊 Data fetched:', {
+      faqs: faqs.length,
+      policies: policies.length,
+      products: products.length,
+      services: services.length,
+      total: faqs.length + policies.length + products.length + services.length
+    });
 
     // Combine and add type
     const allData = [
@@ -51,6 +67,7 @@ const fetchBusinessDataBySlug = async (slug, query = null) => {
       ...services.map(item => ({ ...item, type: 'service' }))
     ];
 
+    console.log('✅ Returning allData with', allData.length, 'items');
     return { business, allData, faqs, policies, products, services };
   }
 

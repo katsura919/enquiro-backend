@@ -20,9 +20,7 @@ const CONVERSATION_STATES = {
 const INTENT_TYPES = {
   INFORMATION_REQUEST: 'information_request',
   COMPLAINT: 'complaint',
-  BOOKING_REQUEST: 'booking_request',
   PRICING_INQUIRY: 'pricing_inquiry',
-  TECHNICAL_SUPPORT: 'technical_support',
   ESCALATION_REQUEST: 'escalation_request',
   CASE_FOLLOWUP: 'case_followup',
   GREETING: 'greeting',
@@ -143,19 +141,9 @@ const recognizeIntent = (query, history = []) => {
     return INTENT_TYPES.COMPLAINT;
   }
   
-  // Booking patterns
-  if (/book|schedule|appointment|reserve|availability|available/.test(lowerQuery)) {
-    return INTENT_TYPES.BOOKING_REQUEST;
-  }
-  
   // Pricing patterns
   if (/price|cost|how much|fee|charge|payment/.test(lowerQuery)) {
     return INTENT_TYPES.PRICING_INQUIRY;
-  }
-  
-  // Technical support patterns
-  if (/how to|help with|support|technical|setup|install|configure/.test(lowerQuery)) {
-    return INTENT_TYPES.TECHNICAL_SUPPORT;
   }
   
   // Default to information request

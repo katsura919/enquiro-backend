@@ -90,12 +90,6 @@ const generateFallbackResponse = async (query, businessName, model, intent, conf
   if (intent === INTENT_TYPES.PRICING_INQUIRY) {
     // We have pricing data in Services and Products models
     fallbackStrategy = 'pricing_available';
-  } else if (intent === INTENT_TYPES.BOOKING_REQUEST) {
-    // We have Services data but no booking/appointment system
-    fallbackStrategy = 'service_inquiry';
-  } else if (intent === INTENT_TYPES.TECHNICAL_SUPPORT) {
-    // Check if we have relevant FAQs or Policies for technical issues
-    fallbackStrategy = 'check_faq_policy';
   } else if (intent === INTENT_TYPES.CASE_FOLLOWUP) {
     fallbackStrategy = 'case_followup_fallback';
   } else if (intent === INTENT_TYPES.INFORMATION_REQUEST) {
@@ -104,7 +98,7 @@ const generateFallbackResponse = async (query, businessName, model, intent, conf
   } else if (confidence < 30) {
     fallbackStrategy = 'general_fallback';
   } else {
-    fallbackStrategy = 'suggest_available_topics';
+    fallbackStrategy = 'general_info_available';
   }
   
   
@@ -133,13 +127,40 @@ ${knowledge.map((k, i) => {
     title = k.name || 'Product';
     content = k.description || '';
     category = k.category ? ` (Product - ${k.category})` : ' (Product)';
-    if (k.price) content += ` - Price: ${k.price}`;
+    
+    // Handle price object structure
+    if (k.price?.amount) {
+      const currency = k.price.currency || 'USD';
+      content += ` | Price: ${currency} ${k.price.amount}`;
+    }
+    // Add SKU if available
+    if (k.sku) {
+      content += ` | SKU: ${k.sku}`;
+    }
+    // Add quantity/availability
+    if (k.quantity !== undefined) {
+      content += ` | ${k.quantity > 0 ? `In Stock (${k.quantity})` : 'Out of Stock'}`;
+    }
   } else if (k.type === 'service') {
     title = k.name || 'Service';
     content = k.description || '';
-    category = ' (Service)';
-    if (k.price) content += ` - Price: ${k.price}`;
-    if (k.duration) content += ` - Duration: ${k.duration}`;
+    category = k.category ? ` (Service - ${k.category})` : ' (Service)';
+    
+    // Handle pricing object structure
+    if (k.pricing) {
+      if (k.pricing.type === 'quote') {
+        content += ` | Pricing: Contact for Quote`;
+      } else if (k.pricing.amount) {
+        const currency = k.pricing.currency || 'USD';
+        const pricingType = k.pricing.type || 'fixed';
+        const typeLabel = pricingType === 'hourly' ? '/hour' : pricingType === 'package' ? ' (package)' : '';
+        content += ` | Price: ${currency} ${k.pricing.amount}${typeLabel}`;
+      }
+    }
+    // Add duration if available
+    if (k.duration) {
+      content += ` | Duration: ${k.duration}`;
+    }
   } else if (k.type === 'policy') {
     title = k.title || 'Policy';
     content = k.content || '';
@@ -244,7 +265,7 @@ const getEscalationMessage = (liveChatEnabled) => {
   if (liveChatEnabled) {
     return "You'll be connected with an available agent shortly.";
   } else {
-    return "Please fill out the form to submit your request.";
+    return "Our live chat is currently not available. Please fill out the form to submit your case, and our team will get back to you as soon as possible.";
   }
 };
 
@@ -268,6 +289,13 @@ const askAI = async (req, res) => {
       return res.status(404).json({ error: "Business not found" });
     }
 
+    console.log('📊 KNOWLEDGE BASE DEBUG:');
+    console.log('Business:', business.name);
+    console.log('Query:', query);
+    console.log('Raw businessData received:', businessData);
+    console.log('businessData length:', businessData?.length || 0);
+    console.log('businessData types:', businessData?.map(item => item.type) || []);
+
     // Get chatbot settings to check if live chat is enabled
     const chatbotSettings = await ChatbotSettings.findOne({ businessId: business._id });
     const liveChatEnabled = chatbotSettings?.enableLiveChat !== false;
@@ -277,6 +305,16 @@ const askAI = async (req, res) => {
 
     // Use business data for AI responses
     const combinedData = businessData || [];
+    
+    console.log('📚 Combined data for AI:', {
+      dataCount: combinedData.length,
+      dataTypes: combinedData.map(item => item.type),
+      sampleData: combinedData.slice(0, 2).map(item => ({
+        type: item.type,
+        title: item.question || item.name || item.title,
+        hasContent: !!(item.answer || item.description || item.content)
+      }))
+    });
 
     // Handle or create session
     let session;
@@ -306,11 +344,11 @@ const askAI = async (req, res) => {
 
     const model = genAI.getGenerativeModel({ 
       //model: "gemini-2.5-pro",
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       generationConfig: {
         temperature: 0.7,
         topP: 0.9,
-        maxOutputTokens: 1000, // Limit response length
+        maxOutputTokens: 2000, 
       }
     });
 
@@ -364,13 +402,18 @@ Business: ${business.name}
 Case Number: ${existingCase.caseNumber}
 Customer: ${existingCase.customerName}
 Query: "${query}"
+Live Chat Status: ${liveChatEnabled ? 'Enabled' : 'Disabled'}
 
 Generate a helpful response that:
 1. Acknowledges their case number and that they're a returning customer
 2. Confirms we found their case
-3. Explains they'll be connected to continue their conversation
-4. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', { caseId: existingCase.escalationId, sessionId: existingCase.sessionId })}
-5. Keep it professional and welcoming
+${liveChatEnabled ?
+`3. Explains they'll be connected to continue their conversation with an agent
+4. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', { caseId: existingCase.escalationId, sessionId: existingCase.sessionId })}` :
+`3. Explains that our live chat is currently not available
+4. Includes this link to submit an update to their case: ${getEscalationLink(liveChatEnabled, 'continue', { caseId: existingCase.escalationId, sessionId: existingCase.sessionId })}
+5. Reassures them that our team will review their update and respond as soon as possible`}
+6. Keep it professional and welcoming
 
 Don't ask for their details again since we have them on file.`;
 
@@ -390,12 +433,18 @@ User explicitly requested: "${query}"
 Business name: ${business.name}
 Escalation Score: ${escalationAnalysis.escalationScore}/100
 Customer Intent: ${escalationAnalysis.intent}
+Live Chat Status: ${liveChatEnabled ? 'Enabled' : 'Disabled'}
 
 The customer wants to speak with a human. Generate a warm, helpful response that:
 1. Acknowledges their request professionally
-2. Asks for their name, email, and contact number if not already provided
+${liveChatEnabled ? 
+`2. Asks for their name, email, and contact number if not already provided
 3. Includes this link at the end: ${getEscalationLink(liveChatEnabled, 'new')}
-4. Reassures them that ${getEscalationMessage(liveChatEnabled)}
+4. Reassures them that they'll be connected with an available agent shortly` :
+`2. Explains that our live chat is currently not available
+3. Asks for their name, email, and contact number so we can assist them
+4. Includes this link at the end: ${getEscalationLink(liveChatEnabled, 'new')}
+5. Reassures them that once they submit the form, our team will review their case and get back to them as soon as possible`}
 
 Keep the tone professional and empathetic.`;
 
@@ -407,7 +456,12 @@ Keep the tone professional and empathetic.`;
       // Check if we have relevant data from any source
       const hasRelevantData = combinedData && combinedData.length > 0;
       
-      if (hasRelevantData && responseConfidence > 40) {
+      console.log('🎯 Response Decision:');
+      console.log('Has relevant data:', hasRelevantData);
+      console.log('Response confidence:', responseConfidence);
+      console.log('Will use knowledge:', hasRelevantData);
+      
+      if (hasRelevantData) {
         // Generate normal AI response with all available data
         const chatPrompt = constructPrompt({ 
           query: query.trim(), 
@@ -417,15 +471,21 @@ Keep the tone professional and empathetic.`;
           businessName: business.name
         });
         
-        console.log(`Response Confidence: ${responseConfidence}%`);
+        console.log(`✅ Using knowledge base - Response Confidence: ${responseConfidence}%`);
+        console.log('📝 PROMPT SENT TO AI:');
         console.log(chatPrompt); // For debugging
+        console.log('📝 END OF PROMPT');
 
         const result = await model.generateContent(chatPrompt);
         responseText = result.response.text();
         
+        console.log('🤖 AI RESPONSE:', responseText);
+        
         // Store the prompt for debugging
         req.debugPrompt = chatPrompt;
       } else {
+        console.log(`⚠️ Using fallback - No relevant data available`);
+        console.log('Customer Intent:', customerIntent);
         // Use enhanced fallback strategies instead of immediate escalation
         responseText = await generateFallbackResponse(
           query, 
@@ -440,8 +500,7 @@ Keep the tone professional and empathetic.`;
           responseText += `\n\nIf you'd like to discuss this further with someone from our team, ${getEscalationLink(liveChatEnabled, 'new')}.`;
           escalationGenerated = true;
         } else if (escalationAnalysis.escalationTier === 'TIER_2' && 
-                   (customerIntent === INTENT_TYPES.PRICING_INQUIRY || 
-                    customerIntent === INTENT_TYPES.BOOKING_REQUEST)) {
+                   customerIntent === INTENT_TYPES.PRICING_INQUIRY) {
           responseText += ` For specific details, feel free to ${getEscalationLink(liveChatEnabled, 'new')}.`;
           escalationGenerated = true;
         }
@@ -512,6 +571,15 @@ Keep the tone professional and empathetic.`;
       }
     });
 
+    console.log("Testing Data:", {
+      dataGivenToAI: combinedData || [],
+      dataCount: combinedData?.length || 0,
+      dataTypes: combinedData?.map(item => item.type) || [],
+      hasRelevantData: combinedData && combinedData.length > 0,
+      escalationAnalysis: escalationAnalysis,
+      qualityChecks: qualityChecks
+    });
+
   } catch (error) {
     console.error("Error in askAI:", error);
     
@@ -533,12 +601,16 @@ Keep the tone professional and empathetic.`;
     
     if (error.message?.includes('quota')) {
       return res.status(503).json({ 
-        error: `Service temporarily unavailable. Please try again later or ${getEscalationLink(liveChatEnabled, 'new')}.` 
+        error: liveChatEnabled 
+          ? `Service temporarily unavailable. Please try again later or ${getEscalationLink(liveChatEnabled, 'new')}.`
+          : `Service temporarily unavailable. Our live chat is currently not available, but you can ${getEscalationLink(liveChatEnabled, 'new')} and our team will assist you.`
       });
     }
 
     res.status(500).json({ 
-      error: `I'm having trouble processing your request right now. Please try again or ${getEscalationLink(liveChatEnabled, 'new')}.` 
+      error: liveChatEnabled
+        ? `I'm having trouble processing your request right now. Please try again or ${getEscalationLink(liveChatEnabled, 'new')}.`
+        : `I'm having trouble processing your request right now. Our live chat is currently not available, but you can ${getEscalationLink(liveChatEnabled, 'new')} and our team will assist you.`
     });
   }
 };
