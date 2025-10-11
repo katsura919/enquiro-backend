@@ -186,6 +186,92 @@ const searchAgents = async (req, res) => {
   }
 };
 
+// Update agent's own profile
+const updateAgentProfile = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided.' });
+    }
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+
+    // Don't allow updating password, email, role, or businessId through this endpoint
+    const { password, email, role, businessId, ...allowedUpdates } = req.body;
+    
+    const agent = await Agent.findOneAndUpdate(
+      { _id: decoded.id, deletedAt: null },
+      allowedUpdates,
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    res.json(agent);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Change agent's password
+const changePassword = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided.' });
+    }
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required.' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+    }
+
+    if (newPassword.length > 50) {
+      return res.status(400).json({ error: 'Password must be less than 50 characters.' });
+    }
+
+    // Check if new password is same as current
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'New password must be different from current password.' });
+    }
+
+    const agent = await Agent.findOne({ _id: decoded.id, deletedAt: null });
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    // Verify current password
+    const bcrypt = require('bcryptjs');
+    const isMatch = await bcrypt.compare(currentPassword, agent.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Current password is incorrect.' });
+    }
+
+    // Hash and update new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    agent.password = hashedPassword;
+    await agent.save();
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 module.exports = {
   createAgent,
   getAgents,
@@ -195,5 +281,7 @@ module.exports = {
   restoreAgent,
   getAgentInfo,
   getAgentsByBusiness,
-  searchAgents
+  searchAgents,
+  updateAgentProfile,
+  changePassword
 };

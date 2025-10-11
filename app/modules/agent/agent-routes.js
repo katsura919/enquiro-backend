@@ -6,6 +6,10 @@ const { getAgentStats } = require('../queue/queue-controller');
 
 // Get Agent info using token
 router.get('/info', agentController.getAgentInfo);
+// Update agent's own profile
+router.put('/profile', agentController.updateAgentProfile);
+// Change agent's password
+router.post('/change-password', agentController.changePassword);
 // Get agent statistics
 router.get('/:agentId/stats', getAgentStats);
 // Create agent
