@@ -20,6 +20,15 @@ const loginAgent = async (req, res) => {
         });
     }
 
+    // Check if agent has been soft deleted
+    if (agent.deletedAt !== null) {
+      return res.status(401).json(
+        { 
+          success: false,
+          message: 'Invalid email or password.',
+        });
+    }
+
     // If password is not stored in the model, this will need to be updated
     const isMatch = await bcrypt.compare(password, agent.password);
     if (!isMatch) {
