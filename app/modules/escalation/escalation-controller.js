@@ -396,6 +396,52 @@ const countEscalationsByBusiness = async (req, res) => {
   }
 };
 
+// Get escalation by case number (for case follow-up)
+const getEscalationByCaseNumber = async (req, res) => {
+  try {
+    const { caseNumber } = req.params;
+    const { businessId } = req.query;
+
+    if (!caseNumber) {
+      return res.status(400).json({ error: 'Case number is required.' });
+    }
+
+    if (!businessId) {
+      return res.status(400).json({ error: 'Business ID is required.' });
+    }
+
+    // Find escalation by case number and business ID
+    const escalation = await Escalation.findOne({ 
+      caseNumber, 
+      businessId 
+    }).populate('sessionId', 'customerDetails');
+
+    if (!escalation) {
+      return res.status(404).json({ error: 'Case not found. Please check your case number and try again.' });
+    }
+
+    // Return escalation data for case continuation
+    res.json({
+      _id: escalation._id,
+      businessId: escalation.businessId,
+      sessionId: escalation.sessionId._id,
+      caseNumber: escalation.caseNumber,
+      customerName: escalation.customerName,
+      customerEmail: escalation.customerEmail,
+      customerPhone: escalation.customerPhone,
+      concern: escalation.concern,
+      description: escalation.description,
+      status: escalation.status,
+      caseOwner: escalation.caseOwner,
+      createdAt: escalation.createdAt,
+      updatedAt: escalation.updatedAt
+    });
+  } catch (err) {
+    console.error('Error getting escalation by case number:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
 module.exports = { 
   createEscalation, 
   getEscalationsByBusiness, 
@@ -406,5 +452,6 @@ module.exports = {
   deleteEscalation, 
   updateEscalationStatus,
   updateCaseOwner,
-  countEscalationsByBusiness
+  countEscalationsByBusiness,
+  getEscalationByCaseNumber
 };

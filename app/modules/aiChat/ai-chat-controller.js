@@ -19,9 +19,6 @@ const {
   ESCALATION_TIERS,
   calculateResponseConfidence,
   getRecentHistory,
-  extractCaseNumber,
-  getEscalationCaseStatus,
-  getEscalationForLiveChat,
   INTENT_TYPES,
   CONVERSATION_STATES,
   recognizeIntent,
@@ -29,56 +26,6 @@ const {
 } = require("./chat-utils");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// Generate case status response
-const generateCaseStatusResponse = async (caseInfo, businessName, model) => {
-  if (!caseInfo) {
-    const notFoundPrompt = `
-Customer is asking about a case that was not found.
-Business: ${businessName}
-
-Generate a helpful, casual chat response that:
-1. Politely explains that the case number wasn't found in our system
-2. Asks them to double-check the case number
-3. Offers to help them with the format (case numbers are usually 6+ characters)
-4. Provides alternative ways to get help
-5. Keep it friendly and conversational like a chat message
-
-Response should be in casual chat format, NOT email format. No subject lines, signatures, or formal email structure.`;
-    
-    const result = await model.generateContent(notFoundPrompt);
-    return result.response.text();
-  }
-  
-  const statusPrompt = `
-Customer is following up on their escalation case in a chat conversation.
-Business: ${businessName}
-
-Case Details:
-- Case Number: ${caseInfo.caseNumber}
-- Status: ${caseInfo.status}
-
-Generate a friendly, conversational chat response that:
-1. Confirms their case number and current status
-2. Explains what the status means in simple terms
-3. Reassures them that we're working on it
-4. Maintains a helpful but casual tone
-
-For status meanings:
-- "escalated": Case has been escalated and is being reviewed by our team
-- "pending": Case is waiting for review or action
-- "resolved": Case has been completed and resolved
-
-IMPORTANT: 
-- Write like you're chatting with them, not sending an email
-- No subject lines, signatures, formal greetings, or email formatting
-- Keep it brief and conversational
-- Don't use "Dear [Customer Name]" or formal closings
-- Write as if you're a helpful chat agent`;
-  
-  const result = await model.generateContent(statusPrompt);
-  return result.response.text();
-};
 
 // Enhanced fallback strategies
 const generateFallbackResponse = async (query, businessName, model, intent, confidence) => {
@@ -90,8 +37,6 @@ const generateFallbackResponse = async (query, businessName, model, intent, conf
   if (intent === INTENT_TYPES.PRICING_INQUIRY) {
     // We have pricing data in Services and Products models
     fallbackStrategy = 'pricing_available';
-  } else if (intent === INTENT_TYPES.CASE_FOLLOWUP) {
-    fallbackStrategy = 'case_followup_fallback';
   } else if (intent === INTENT_TYPES.INFORMATION_REQUEST) {
     // We can handle general info about services, products, policies, FAQs
     fallbackStrategy = 'general_info_available';
@@ -238,7 +183,8 @@ const getEscalationLink = (liveChatEnabled, linkType = 'new', params = {}) => {
   if (liveChatEnabled) {
     // Live chat enabled - use existing escalate:// links
     if (linkType === 'continue') {
-      const link = `[click here to continue your case](escalate://continue?caseId=${params.caseId}&sessionId=${params.sessionId})`;
+      // For continue links, we just trigger the dialog - no params needed
+      const link = `[click here to continue your case](escalate://continue)`;
       console.log('🔗 Generated live chat continue link:', link);
       return link;
     } else {
@@ -249,7 +195,8 @@ const getEscalationLink = (liveChatEnabled, linkType = 'new', params = {}) => {
   } else {
     // Live chat disabled - use form-only links
     if (linkType === 'continue') {
-      const link = `[click here to submit an update to your case](escalate://form?caseId=${params.caseId})`;
+      // For form continue, also no params - user will enter case number in form
+      const link = `[click here to submit an update to your case](escalate://form)`;
       console.log('🔗 Generated form continue link:', link);
       return link;
     } else {
@@ -344,7 +291,7 @@ const askAI = async (req, res) => {
 
     const model = genAI.getGenerativeModel({ 
       //model: "gemini-2.5-pro",
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       generationConfig: {
         temperature: 0.7,
         topP: 0.9,
@@ -358,77 +305,35 @@ const askAI = async (req, res) => {
     let responseText;
     let escalationGenerated = false;
 
-    // Check if this is a case followup request
-    if (customerIntent === INTENT_TYPES.CASE_FOLLOWUP) {
-      const caseNumber = extractCaseNumber(query);
+    if (escalationAnalysis.shouldEscalate) {
+      // Check if user is mentioning an existing case or follow-up
+      const hasCaseFollowupIntent = /\b(existing case|my case|case number|follow up|followup|following up|check.*status|update.*case|case.*update|previous case|submitted case|ongoing case)\b/i.test(query);
       
-      if (caseNumber) {
-        // Fetch case information
-        const caseInfo = await getEscalationCaseStatus(caseNumber, business._id);
-        responseText = await generateCaseStatusResponse(caseInfo, business.name, model);
-      } else {
-        // No case number found, ask for it
-        const noCaseNumberPrompt = `
-Customer is asking about case status but didn't provide a case number.
-Business: ${business.name}
-Customer query: "${query}"
-
-Generate a helpful response that:
-1. Acknowledges their request to check case status
-2. Politely asks for their case number
-3. Explains that case numbers are usually 6+ characters long
-4. Provides examples like "Case #ABC12345" or "Ticket #123456789"
-5. Assures them you'll be happy to help once you have the case number
-6. Keep it friendly and helpful
-
-Don't mention technical limitations.`;
-        
-        const result = await model.generateContent(noCaseNumberPrompt);
-        responseText = result.response.text();
-      }
-    } else if (escalationAnalysis.shouldEscalate) {
-      // Check if this is a returning customer with a case number
-      const caseNumber = extractCaseNumber(query);
+      let linkType = 'new';
+      let escalationPrompt = '';
       
-      if (caseNumber) {
-        // Returning customer - check if case exists
-        const existingCase = await getEscalationForLiveChat(caseNumber, business._id);
-        
-        if (existingCase) {
-          // Case found - continue existing session
-          const returningCustomerPrompt = `
-Customer with existing case wants to speak with a human.
-Business: ${business.name}
-Case Number: ${existingCase.caseNumber}
-Customer: ${existingCase.customerName}
-Query: "${query}"
+      if (hasCaseFollowupIntent) {
+        // User has an existing case - provide continue link
+        linkType = 'continue';
+        escalationPrompt = `
+User is asking about an existing case or wants to follow up: "${query}"
+Business name: ${business.name}
 Live Chat Status: ${liveChatEnabled ? 'Enabled' : 'Disabled'}
 
-Generate a helpful response that:
-1. Acknowledges their case number and that they're a returning customer
-2. Confirms we found their case
+The customer wants to check on or continue with an existing case. Generate a warm, helpful response that:
+1. Acknowledges that they're following up on an existing case
+2. Explains that they'll need to provide their case number
 ${liveChatEnabled ?
-`3. Explains they'll be connected to continue their conversation with an agent
-4. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', { caseId: existingCase.escalationId, sessionId: existingCase.sessionId })}` :
-`3. Explains that our live chat is currently not available
-4. Includes this link to submit an update to their case: ${getEscalationLink(liveChatEnabled, 'continue', { caseId: existingCase.escalationId, sessionId: existingCase.sessionId })}
-5. Reassures them that our team will review their update and respond as soon as possible`}
-6. Keep it professional and welcoming
+`3. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', {})}
+4. Explains that clicking the link will allow them to enter their case number to continue their conversation` :
+`3. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', {})}
+4. Explains that clicking the link will allow them to enter their case number to submit an update`}
+5. Keep it friendly and helpful
 
-Don't ask for their details again since we have them on file.`;
-
-          const escalationResponse = await model.generateContent(returningCustomerPrompt);
-          responseText = escalationResponse.response.text().trim();
-          escalationGenerated = true;
-        } else {
-          // Case not found - add console logging for debugging
-          console.log(`🔍 Case lookup failed: Case #${caseNumber} not found for business ${business._id}`);
-          responseText = `I couldn't find case #${caseNumber} in our system. Please double-check the case number, or if you'd like to start a new case, ${getEscalationLink(liveChatEnabled, 'new')}.`;
-          escalationGenerated = true;
-        }
+Don't ask for personal details yet - just guide them to use the link to enter their case number.`;
       } else {
-        // New customer - regular escalation flow
-        const escalationPrompt = `
+        // New escalation - regular flow
+        escalationPrompt = `
 User explicitly requested: "${query}"
 Business name: ${business.name}
 Escalation Score: ${escalationAnalysis.escalationScore}/100
@@ -447,11 +352,11 @@ ${liveChatEnabled ?
 5. Reassures them that once they submit the form, our team will review their case and get back to them as soon as possible`}
 
 Keep the tone professional and empathetic.`;
-
-        const escalationResponse = await model.generateContent(escalationPrompt);
-        responseText = escalationResponse.response.text().trim();
-        escalationGenerated = true;
       }
+
+      const escalationResponse = await model.generateContent(escalationPrompt);
+      responseText = escalationResponse.response.text().trim();
+      escalationGenerated = true;
     } else {
       // Check if we have relevant data from any source
       const hasRelevantData = combinedData && combinedData.length > 0;
@@ -571,13 +476,8 @@ Keep the tone professional and empathetic.`;
       }
     });
 
-    console.log("Testing Data:", {
-      dataGivenToAI: combinedData || [],
-      dataCount: combinedData?.length || 0,
-      dataTypes: combinedData?.map(item => item.type) || [],
-      hasRelevantData: combinedData && combinedData.length > 0,
-      escalationAnalysis: escalationAnalysis,
-      qualityChecks: qualityChecks
+    console.log("Response:", {
+      answer: responseText,
     });
 
   } catch (error) {

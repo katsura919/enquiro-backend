@@ -47,6 +47,11 @@ router.get('/agent/:agentId',
     escalationController.getEscalationsByCaseOwner
 );
 
+// Get escalation by case number (for case follow-up, no auth needed for customers)
+router.get('/case/:caseNumber',
+    escalationController.getEscalationByCaseNumber
+);
+
 // Get an escalation by ID
 router.get('/:id', 
     authMiddleware,
