@@ -20,4 +20,7 @@ router.get('/agents/:businessId/count', analyticsController.getAgentsCount);
 // Get ratings distribution (1-5 stars) for a specific business
 router.get('/ratings/:businessId/distribution', analyticsController.getRatingsDistribution);
 
+// Get top 5 latest escalations for a specific business
+router.get('/escalations/:businessId/latest', analyticsController.getLatestEscalations);
+
 module.exports = router;

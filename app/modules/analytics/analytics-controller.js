@@ -395,11 +395,48 @@ const getRatingsDistribution = async (req, res) => {
   }
 };
 
+// Get top 5 latest escalations for a specific business
+const getLatestEscalations = async (req, res) => {
+  try {
+    const { businessId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(businessId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid business ID'
+      });
+    }
+
+    const latestEscalations = await Escalation.find({
+      businessId: new mongoose.Types.ObjectId(businessId)
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate('caseOwner', 'firstName lastName email')
+      .populate('sessionId', 'sessionId')
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        escalations: latestEscalations
+      },
+      message: 'Latest escalations retrieved successfully'
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+
 module.exports = {
   getBusinessAverageRating,
   getEscalatedCount,
   getEscalationsPerDay,
   getSessionsCount,
   getAgentsCount,
-  getRatingsDistribution
+  getRatingsDistribution,
+  getLatestEscalations
 };
