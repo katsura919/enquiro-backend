@@ -2,7 +2,7 @@ const Chat = require("../../models/chat-model");
 const Business = require('../../models/business-model');
 const Session = require('../../models/session-model');
 const { deleteChatWithFiles } = require('../../utils/fileManagement');
-
+ 
 // Controller to delete a chat by its ID
 const deleteChat = async (req, res) => {
   const { chatId } = req.params;
@@ -114,7 +114,9 @@ const getChatsByBusiness = async (req, res) => {
 const getChatsBySession = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const chats = await Chat.find({ sessionId }).sort({ createdAt: 1 });
+    const chats = await Chat.find({ sessionId })
+      .populate('agentId', 'name profilePic')
+      .sort({ createdAt: 1 });
     res.json(chats);
   } catch (err) {
     console.error('Error fetching chats by session:', err);
