@@ -7,6 +7,7 @@ const Agent = require('../../models/agent-model');
 const ChatbotSettings = require('../../models/chatbot-settings-model');
 const notificationService = require('../../services/notificationService');
 const { emitNotification } = require('../../lib/socketEvents/notif-socket');
+const { sendEscalationEmail } = require('../../services/escalationEmail');
 const mongoose = require('mongoose');
 
 // Helper function to generate a unique case number
@@ -78,6 +79,21 @@ const createEscalation = async (req, res) => {
     } catch (notifError) {
       console.error('Error creating case notification:', notifError);
       // Don't fail the request if notification fails
+    }
+
+    // Send escalation confirmation email to customer
+    try {
+      await sendEscalationEmail(
+        customerEmail,
+        customerName,
+        caseNumber,
+        concern,
+        business.name || 'Customer Support',
+        business.logo || null // Pass the business logo URL
+      );
+      console.log('[ESCALATION] Confirmation email sent to:', customerEmail);
+    } catch (emailError) {
+      console.error('Error sending escalation email:', emailError);
     }
 
     // Handle response based on live chat settings
