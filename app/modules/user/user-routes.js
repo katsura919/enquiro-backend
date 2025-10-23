@@ -18,6 +18,16 @@ router.post('/change-password',
     userController.changePassword
 );
 
+// Forgot password - Request password reset
+router.post('/forgot-password', 
+    userController.forgotPassword
+);
+
+// Reset password with token
+router.post('/reset-password', 
+    userController.resetPassword
+);
+
 // Create a user
 router.post('/', 
     authMiddleware,
