@@ -137,17 +137,16 @@ ${query}
 ${isEscalation ? 
 `- The customer explicitly wants to speak with a human
 - Acknowledge their request professionally and connect them` :
-`- Act like a helpful, knowledgeable person - not a robotic AI
+`- Be CONCISE and DIRECT - get straight to the point
+- Answer in 2-3 sentences maximum unless more detail is specifically requested
 - Use the business information provided to give helpful answers
-- When information isn't available, respond naturally like a real person would:
-  * "That's a great question! I wish I had more details about that..."
-  * "Hmm, I don't have the specific details on that at the moment..."
-  * "I'd love to help with that, but I don't have those particulars right now..."
-- Be conversational and empathetic
-- Offer alternatives when possible
-- Only suggest speaking with someone if the customer seems frustrated or explicitly asks
-- Keep responses warm, helpful, and naturally human-like
-- Use "I" statements to sound more personal`}
+- When information isn't available, respond naturally and briefly:
+  * "I don't have those specific details at the moment."
+  * "I wish I had more information about that."
+- Be conversational but brief
+- Avoid unnecessary phrases like "That's a great question!" or "I'd love to help!"
+- Skip filler words and get to the answer immediately
+- Only suggest speaking with someone if the customer seems frustrated or explicitly asks`}
 `;
 
 // Enhanced escalation detection with intelligent scoring
@@ -293,9 +292,9 @@ const askAI = async (req, res) => {
       //model: "gemini-2.5-pro",
       model: "gemini-2.0-flash",
       generationConfig: {
-        temperature: 0.7,
-        topP: 0.9,
-        maxOutputTokens: 2000, 
+        temperature: 0.5, // Lower temperature for more focused, concise responses
+        topP: 0.8, // Reduced for less verbose output
+        maxOutputTokens: 500, // Reduced from 2000 to encourage brevity
       }
     });
 
@@ -320,38 +319,33 @@ User is asking about an existing case or wants to follow up: "${query}"
 Business name: ${business.name}
 Live Chat Status: ${liveChatEnabled ? 'Enabled' : 'Disabled'}
 
-The customer wants to check on or continue with an existing case. Generate a warm, helpful response that:
-1. Acknowledges that they're following up on an existing case
-2. Explains that they'll need to provide their case number
+Generate a CONCISE response (2-3 sentences max) that:
+1. Acknowledges they're following up on an existing case
+2. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', {})}
 ${liveChatEnabled ?
-`3. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', {})}
-4. Explains that clicking the link will allow them to enter their case number to continue their conversation` :
-`3. Includes this link: ${getEscalationLink(liveChatEnabled, 'continue', {})}
-4. Explains that clicking the link will allow them to enter their case number to submit an update`}
-5. Keep it friendly and helpful
+`3. Explains they can enter their case number to continue` :
+`3. Explains they can enter their case number to submit an update`}
 
-Don't ask for personal details yet - just guide them to use the link to enter their case number.`;
+Keep it brief and direct. Don't ask for personal details.`;
       } else {
         // New escalation - regular flow
         escalationPrompt = `
 User explicitly requested: "${query}"
 Business name: ${business.name}
-Escalation Score: ${escalationAnalysis.escalationScore}/100
-Customer Intent: ${escalationAnalysis.intent}
 Live Chat Status: ${liveChatEnabled ? 'Enabled' : 'Disabled'}
 
-The customer wants to speak with a human. Generate a warm, helpful response that:
-1. Acknowledges their request professionally
+Generate a CONCISE response (2-3 sentences max) that:
+1. Acknowledges their request
 ${liveChatEnabled ? 
-`2. Asks for their name, email, and contact number if not already provided
-3. Includes this link at the end: ${getEscalationLink(liveChatEnabled, 'new')}
-4. Reassures them that they'll be connected with an available agent shortly` :
-`2. Explains that our live chat is currently not available
-3. Asks for their name, email, and contact number so we can assist them
-4. Includes this link at the end: ${getEscalationLink(liveChatEnabled, 'new')}
-5. Reassures them that once they submit the form, our team will review their case and get back to them as soon as possible`}
+`2. Asks for their name, email, and contact number
+3. Includes this link: ${getEscalationLink(liveChatEnabled, 'new')}
+4. Mentions they'll be connected with an agent shortly` :
+`2. Explains live chat is currently unavailable
+3. Asks for their name, email, and contact number
+4. Includes this link: ${getEscalationLink(liveChatEnabled, 'new')}
+5. Mentions the team will respond soon`}
 
-Keep the tone professional and empathetic.`;
+Keep it brief and professional.`;
       }
 
       const escalationResponse = await model.generateContent(escalationPrompt);
@@ -400,13 +394,56 @@ Keep the tone professional and empathetic.`;
           responseConfidence
         );
         
-        // Only suggest escalation for critical information or after multiple attempts
+        // Proactive escalation for various scenarios
         if (escalationAnalysis.escalationTier === 'TIER_3') {
-          responseText += `\n\nIf you'd like to discuss this further with someone from our team, ${getEscalationLink(liveChatEnabled, 'new')}.`;
+          responseText += `\n\nIf you'd like to discuss this further, ${getEscalationLink(liveChatEnabled, 'new')}.`;
           escalationGenerated = true;
         } else if (escalationAnalysis.escalationTier === 'TIER_2' && 
                    customerIntent === INTENT_TYPES.PRICING_INQUIRY) {
-          responseText += ` For specific details, feel free to ${getEscalationLink(liveChatEnabled, 'new')}.`;
+          responseText += `\n\nFor specific details, ${getEscalationLink(liveChatEnabled, 'new')}.`;
+          escalationGenerated = true;
+        }
+      }
+      
+      // Proactive escalation: Offer help if confidence is very low or repeated failures detected
+      if (!escalationGenerated) {
+        // Check for low confidence response (below 30%)
+        if (responseConfidence < 30 && escalationAnalysis.escalationScore >= ESCALATION_TIERS.TIER_2.threshold) {
+          console.log(`🔔 Proactive escalation triggered: Low confidence (${responseConfidence}%) + Escalation score ${escalationAnalysis.escalationScore}`);
+          responseText += `\n\nWould you like to ${getEscalationLink(liveChatEnabled, 'new')}?`;
+          escalationGenerated = true;
+        }
+        
+        // Check for repeated unhelpful AI responses (detected in history)
+        const aiMessages = recentHistory.filter(msg => msg.role === 'assistant');
+        const unhelpfulCount = aiMessages.filter(msg => {
+          const content = msg.content.toLowerCase();
+          return content.includes("don't have") || 
+                 content.includes("don't know") ||
+                 content.includes("not available") ||
+                 content.includes("wish i had more") ||
+                 content.includes("i'd love to help with that, but");
+        }).length;
+        
+        if (!escalationGenerated && unhelpfulCount >= 2) {
+          console.log(`🔔 Proactive escalation triggered: ${unhelpfulCount} unhelpful responses detected`);
+          responseText += `\n\n${getEscalationLink(liveChatEnabled, 'new')} for more detailed help.`;
+          escalationGenerated = true;
+        }
+        
+        // Check for complex topics that need human intervention
+        const lowerQuery = query.toLowerCase();
+        const complexTopics = [
+          'return', 'refund', 'money back', 'cancel order', 'change order',
+          'dispute', 'complaint', 'billing issue', 'payment problem',
+          'account locked', 'technical issue', 'warranty', 'guarantee',
+          'defective', 'lost package', 'damaged', 'not working', 'broken'
+        ];
+        const hasComplexTopic = complexTopics.some(topic => lowerQuery.includes(topic));
+        
+        if (!escalationGenerated && hasComplexTopic && escalationAnalysis.escalationScore >= ESCALATION_TIERS.TIER_2.threshold) {
+          console.log(`🔔 Proactive escalation triggered: Complex topic detected in query`);
+          responseText += `\n\n${getEscalationLink(liveChatEnabled, 'new')} to help resolve this.`;
           escalationGenerated = true;
         }
       }

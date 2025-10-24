@@ -1,6 +1,7 @@
 // Calculate response confidence score
 const calculateResponseConfidence = (query, foundData, historyContext = []) => {
   let confidence = 0;
+  const lowerQuery = query.toLowerCase();
   
   // Factor 1: Data relevance (0-40 points)
   if (foundData && foundData.length > 0) {
@@ -46,7 +47,41 @@ const calculateResponseConfidence = (query, foundData, historyContext = []) => {
     }
   }
   
-  return Math.min(confidence, 100);
+  // Factor 5: Penalty for complex topics (-20 to -40 points)
+  // These topics typically require human intervention regardless of knowledge base
+  const complexTopics = [
+    'return', 'refund', 'money back', 'cancel order', 'change order',
+    'dispute', 'complaint', 'billing issue', 'payment problem',
+    'account locked', 'technical issue', 'not working', 'broken', 'error',
+    'warranty', 'guarantee', 'defective', 'lost package', 'damaged'
+  ];
+  
+  const hasComplexTopic = complexTopics.some(topic => lowerQuery.includes(topic));
+  if (hasComplexTopic) {
+    confidence -= 30; // Reduce confidence significantly for complex topics
+  }
+  
+  // Factor 6: Penalty for repeated unhelpful history (-15 to -30 points)
+  if (historyContext.length > 0) {
+    const aiMessages = historyContext.filter(msg => msg.role === 'assistant');
+    const unhelpfulCount = aiMessages.filter(msg => {
+      const content = msg.content.toLowerCase();
+      return content.includes("don't have") || 
+             content.includes("don't know") ||
+             content.includes("not available") ||
+             content.includes("wish i had more") ||
+             content.includes("i'd love to help with that, but");
+    }).length;
+    
+    if (unhelpfulCount >= 2) {
+      confidence -= 30; // Significant penalty for multiple failures
+    } else if (unhelpfulCount === 1) {
+      confidence -= 15; // Moderate penalty for one failure
+    }
+  }
+  
+  // Ensure confidence stays within 0-100 range
+  return Math.max(0, Math.min(confidence, 100));
 };
 
 module.exports = calculateResponseConfidence;

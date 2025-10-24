@@ -6,7 +6,8 @@ const INTENT_TYPES = {
   ESCALATION_REQUEST: 'escalation_request',
   CASE_FOLLOWUP: 'case_followup',
   GREETING: 'greeting',
-  GENERAL_INQUIRY: 'general_inquiry'
+  GENERAL_INQUIRY: 'general_inquiry',
+  COMPLEX_ISSUE: 'complex_issue'
 };
 
 // Conversation states
@@ -45,6 +46,15 @@ const recognizeIntent = (query, history = []) => {
     return INTENT_TYPES.ESCALATION_REQUEST;
   }
   
+  // Complex issue patterns (high priority - check before complaint)
+  if (/return|refund|money back|cancel order|change order|modify order/.test(lowerQuery) ||
+      /dispute|billing issue|payment problem|charged incorrectly/.test(lowerQuery) ||
+      /account locked|account suspended|can't login|access denied/.test(lowerQuery) ||
+      /warranty|guarantee|defective|faulty|damaged/.test(lowerQuery) ||
+      /lost package|tracking|shipment|delivery failed|not received/.test(lowerQuery)) {
+    return INTENT_TYPES.COMPLEX_ISSUE;
+  }
+  
   // Complaint patterns
   if (/complaint|problem|issue|wrong|error|broken|not working|disappointed/.test(lowerQuery)) {
     return INTENT_TYPES.COMPLAINT;
@@ -71,6 +81,10 @@ const getConversationState = (history, currentIntent, escalationScore) => {
   
   if (currentIntent === INTENT_TYPES.ESCALATION_REQUEST || escalationScore >= 100) {
     return CONVERSATION_STATES.ESCALATION_REQUESTED;
+  }
+  
+  if (currentIntent === INTENT_TYPES.COMPLEX_ISSUE) {
+    return CONVERSATION_STATES.ESCALATION_CONSIDERING; // Complex issues should be escalated
   }
   
   if (escalationScore >= 75) {

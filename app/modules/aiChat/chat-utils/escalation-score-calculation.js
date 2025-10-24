@@ -54,7 +54,7 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
     }
   });
   
-  // Factor 5: Conversation history context (+10-30)
+  // Factor 5: Conversation history context (+10-50)
   if (recentHistory && recentHistory.length > 0) {
     const customerMessages = recentHistory.filter(msg => msg.role === 'user');
     const aiMessages = recentHistory.filter(msg => msg.role === 'assistant');
@@ -64,15 +64,34 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
       score += 15;
     }
     
-    // If AI has given "I don't know" responses multiple times
-    const unknownResponses = aiMessages.filter(msg => 
-      msg.content.toLowerCase().includes("don't have") || 
-      msg.content.toLowerCase().includes("don't know") ||
-      msg.content.toLowerCase().includes("not available")
-    );
+    // If AI has given "I don't know" or unhelpful responses multiple times
+    const unhelpfulResponses = aiMessages.filter(msg => {
+      const content = msg.content.toLowerCase();
+      return content.includes("don't have") || 
+             content.includes("don't know") ||
+             content.includes("not available") ||
+             content.includes("don't have the specific") ||
+             content.includes("don't have those") ||
+             content.includes("don't have more details") ||
+             content.includes("wish i had more") ||
+             content.includes("i'd love to help with that, but") ||
+             content.includes("hmm, i don't") ||
+             content.includes("unfortunately") ||
+             (content.includes("can't") && content.includes("help"));
+    });
     
-    if (unknownResponses.length > 1) {
-      score += 25;
+    // Progressive scoring based on number of unhelpful responses
+    if (unhelpfulResponses.length === 1) {
+      score += 15; // First unhelpful response - minor increase
+    } else if (unhelpfulResponses.length === 2) {
+      score += 35; // Second unhelpful response - moderate increase
+    } else if (unhelpfulResponses.length >= 3) {
+      score += 50; // Third+ unhelpful response - significant increase
+    }
+    
+    // If conversation is getting long without resolution (5+ exchanges)
+    if (customerMessages.length >= 5 && unhelpfulResponses.length >= 2) {
+      score += 20; // Long conversation + multiple failures = definitely needs help
     }
   }
   
@@ -85,6 +104,35 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
   if (criticalInfoKeywords.some(keyword => lowerQuery.includes(keyword))) {
     score += 10;
   }
+  
+  // Factor 7: Complex topics that require human intervention (+40-70)
+  const complexTopics = [
+    // Returns and refunds
+    { words: ['return', 'refund', 'money back'], weight: 60 },
+    // Order issues
+    { words: ['cancel order', 'change order', 'modify order', 'order problem', 'wrong item', 'damaged'], weight: 55 },
+    // Disputes and complaints
+    { words: ['dispute', 'charge', 'charged incorrectly', 'billing issue', 'payment problem'], weight: 60 },
+    { words: ['complaint', 'complain', 'not satisfied', 'poor service', 'bad experience'], weight: 50 },
+    // Account issues
+    { words: ['account locked', 'account suspended', 'can\'t login', 'reset password', 'access denied'], weight: 45 },
+    // Technical issues
+    { words: ['not working', 'broken', 'error message', 'technical issue', 'bug', 'glitch'], weight: 40 },
+    // Legal/policy issues
+    { words: ['legal', 'lawyer', 'sue', 'contract', 'terms violation', 'policy violation'], weight: 70 },
+    // Warranty and guarantees
+    { words: ['warranty', 'guarantee', 'defective', 'faulty'], weight: 55 },
+    // Special requests
+    { words: ['custom', 'customize', 'special request', 'special order', 'bulk order'], weight: 45 },
+    // Shipping issues
+    { words: ['lost package', 'tracking', 'shipment', 'delivery failed', 'not received'], weight: 50 }
+  ];
+  
+  complexTopics.forEach(({ words, weight }) => {
+    if (words.some(word => lowerQuery.includes(word))) {
+      score += weight;
+    }
+  });
   
   return Math.min(score, 100); // Cap at 100
 };

@@ -2,12 +2,10 @@ const generalInfoAvailablePrompt = (query, businessName) => `
 Customer asked: "${query}"
 Business: ${businessName}
 
-You have access to Services, Products, Policies, and FAQs. Generate a helpful response that:
-1. Acknowledges their question warmly
-2. Mentions the types of information you can help with (services, products, policies, frequently asked questions)
-3. Asks them to be more specific or guides them toward available information
-4. Keep it conversational and helpful
+You have access to Services, Products, Policies, and FAQs. Generate a CONCISE response (1-2 sentences) that:
+1. Asks them to be more specific
+2. Skip greetings and filler phrases - be direct
 
-Example: "I'm here to help! I have information about our services, products, policies, and answers to frequently asked questions. What specifically would you like to know more about?"`;
+Example: "I have information about our services, products, policies, and FAQs. What specifically would you like to know?"`;
 
 module.exports = generalInfoAvailablePrompt;
