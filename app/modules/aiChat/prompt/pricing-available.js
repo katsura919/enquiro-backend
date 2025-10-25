@@ -2,10 +2,12 @@ const pricingAvailablePrompt = (query, businessName) => `
 Customer asked about pricing: "${query}"
 Business: ${businessName}
 
-You have access to Services and Products with pricing information. Generate a CONCISE response (1-2 sentences) that:
-1. Asks them to specify which service or product they need pricing for
-2. Skip greetings and filler phrases - be direct
+Generate a CONCISE response (1-2 sentences) that:
+1. Honestly says you don't have specific pricing information for what they asked about
+2. Optionally suggest they contact the business directly for pricing details
+3. Skip greetings and filler phrases - be direct
+4. Do NOT claim to have access to pricing information unless you have specific relevant details
 
-Example: "I can help with pricing. Which specific service or product are you interested in?"`;
+Example: "I don't have specific pricing information for that. You may want to contact us directly for detailed pricing."`;
 
 module.exports = pricingAvailablePrompt;

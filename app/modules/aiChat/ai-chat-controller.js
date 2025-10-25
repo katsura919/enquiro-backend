@@ -58,6 +58,9 @@ const generateFallbackResponse = async (query, businessName, model, intent, conf
 // Enhanced prompt construction with better structure and natural responses
 const constructPrompt = ({ query, knowledge, history, isEscalation, businessName }) => `
 You are working for ${businessName} company. Be a friendly and helpful AI assistant. Act like a real, knowledgeable person.
+
+IMPORTANT: Before responding, check if the business information below actually answers the customer's specific question. If it doesn't, be honest and say you don't have that information.
+
 ${!isEscalation && knowledge?.length > 0 ? 
 `**Available Business Information:**
 ${knowledge.map((k, i) => {
@@ -139,13 +142,17 @@ ${isEscalation ?
 - Acknowledge their request professionally and connect them` :
 `- Be CONCISE and DIRECT - get straight to the point
 - Answer in 2-3 sentences maximum unless more detail is specifically requested
-- Use the business information provided to give helpful answers
-- When information isn't available, respond naturally and briefly:
-  * "I don't have those specific details at the moment."
-  * "I wish I had more information about that."
-- Be conversational but brief
+- CRITICAL: ONLY use the business information provided if it DIRECTLY answers the customer's specific question
+- If the provided information doesn't address their question, be honest and say you don't have that information
+- Do NOT claim to have knowledge about general topics (services, products, FAQs) unless you have specific relevant information
+- When you don't have relevant information, respond honestly:
+  * "I don't have information about that specific topic."
+  * "I don't have details about that."
+  * "I'm not able to help with that particular question."
+- Be conversational but brief and honest
 - Avoid unnecessary phrases like "That's a great question!" or "I'd love to help!"
 - Skip filler words and get to the answer immediately
+- Never claim to have access to information categories unless you're providing specific relevant details
 - Only suggest speaking with someone if the customer seems frustrated or explicitly asks`}
 `;
 
