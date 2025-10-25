@@ -46,6 +46,12 @@ const updateChatStatus = async (req, res) => {
     if (!action || !["like", "dislike", "none"].includes(action)) {
       return res.status(400).json({ error: "Invalid action. Valid actions are 'like', 'dislike', or 'none'." });
     }
+
+    // Validate MongoDB ObjectId format
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return res.status(400).json({ error: "Invalid chat ID format" });
+    }
   
     try {
       let isGoodResponse = null;
@@ -155,6 +161,119 @@ const updateChat = async (req, res) => {
   }
 };
 
+// Get all rated chat messages (where isGoodResponse is not null)
+const getRatedChats = async (req, res) => {
+  try {
+    const { businessId } = req.query;
+    
+    // Build query filter
+    const filter = {
+      isGoodResponse: { $ne: null },
+      senderType: 'ai' // Only get AI messages since they're the ones that get rated
+    };
+    
+    // Add businessId filter if provided
+    if (businessId) {
+      filter.businessId = businessId;
+    }
+    
+    const chats = await Chat.find(filter)
+      .populate('businessId', 'name slug')
+      .populate('sessionId', 'customerName customerEmail')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      count: chats.length,
+      data: chats
+    });
+  } catch (err) {
+    console.error('Error fetching rated chats:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+// Get chat messages by session ID with optional filtering
+const getMessagesBySession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { senderType, messageType, limit, skip } = req.query;
+
+    // Validate sessionId
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+      return res.status(400).json({ error: "Invalid session ID format" });
+    }
+
+    // Build query filter
+    const filter = { sessionId };
+    
+    // Add optional filters
+    if (senderType) {
+      if (!['customer', 'ai', 'agent', 'system'].includes(senderType)) {
+        return res.status(400).json({ error: "Invalid senderType. Must be: customer, ai, agent, or system" });
+      }
+      filter.senderType = senderType;
+    }
+    
+    if (messageType) {
+      if (!['text', 'image', 'file'].includes(messageType)) {
+        return res.status(400).json({ error: "Invalid messageType. Must be: text, image, or file" });
+      }
+      filter.messageType = messageType;
+    }
+
+    // Build query with pagination
+    let query = Chat.find(filter)
+      .populate('agentId', 'name profilePic email')
+      .populate('businessId', 'name slug')
+      .sort({ createdAt: 1 }); // Chronological order for conversation flow
+
+    // Apply pagination if provided
+    if (skip) {
+      const skipNum = parseInt(skip);
+      if (isNaN(skipNum) || skipNum < 0) {
+        return res.status(400).json({ error: "Invalid skip parameter. Must be a non-negative number" });
+      }
+      query = query.skip(skipNum);
+    }
+
+    if (limit) {
+      const limitNum = parseInt(limit);
+      if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
+        return res.status(400).json({ error: "Invalid limit parameter. Must be between 1 and 1000" });
+      }
+      query = query.limit(limitNum);
+    }
+
+    const messages = await query;
+
+    // Get total count for pagination info
+    const totalCount = await Chat.countDocuments(filter);
+
+    res.json({
+      success: true,
+      sessionId,
+      totalCount,
+      count: messages.length,
+      pagination: {
+        skip: parseInt(skip) || 0,
+        limit: parseInt(limit) || totalCount,
+        hasMore: (parseInt(skip) || 0) + messages.length < totalCount
+      },
+      filters: {
+        senderType: senderType || 'all',
+        messageType: messageType || 'all'
+      },
+      data: messages
+    });
+
+  } catch (err) {
+    console.error('Error fetching messages by session:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
 module.exports = { 
   deleteChat, 
   getChats, 
@@ -163,5 +282,7 @@ module.exports = {
   getChatsByBusiness, 
   getChatsBySession, 
   getChatById, 
-  updateChat 
+  updateChat,
+  getRatedChats,
+  getMessagesBySession
 };

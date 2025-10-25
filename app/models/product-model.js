@@ -30,7 +30,7 @@ const productSchema = new mongoose.Schema({
     },
     currency: {
       type: String,
-      default: 'USD'
+      default: 'PHP'
     }
   },
   quantity: {

@@ -481,14 +481,14 @@ Keep it brief and professional.`;
       isGoodResponse: null
     });
 
-    // Save AI response as a separate chat message with quality metadata
+    // Save AI response as a separate chat message
     const aiChat = await Chat.create({
       businessId: business._id,
       sessionId: session._id,
       message: responseText,
       senderType: "ai",
       agentId: null,
-      isGoodResponse: qualityScore > 70 // Auto-rate based on quality checks
+      isGoodResponse: null // Let customers rate manually
     });
 
     // Enhanced response with comprehensive analytics

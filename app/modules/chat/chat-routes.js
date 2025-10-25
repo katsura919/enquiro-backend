@@ -12,6 +12,12 @@ router.delete("/delete/:chatId", chatController.deleteChat);
 router.get("/chats", chatController.getChats); 
 router.put("/update-chat-status/:chatId", chatController.updateChatStatus);
 
+// Get rated chat messages (where isGoodResponse is not null)
+router.get("/rated", chatController.getRatedChats);
+
+// Get chat messages by session ID with optional filtering
+router.get("/messages/:sessionId", chatController.getMessagesBySession);
+
 // Create a chat
 router.post('/', chatController.createChat);
 
