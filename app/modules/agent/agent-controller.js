@@ -1,6 +1,7 @@
 
 const jwt = require('jsonwebtoken');
 const Agent = require('../../models/agent-model');
+const { uploadToCloudinary, deleteFromCloudinary, upload } = require('../../services/fileUploadService');
 
 // Fetch agent info using JWT token
 const getAgentInfo = async (req, res) => {
@@ -272,6 +273,123 @@ const changePassword = async (req, res) => {
   }
 };
 
+// Upload/update agent's profile picture
+const uploadProfilePicture = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided.' });
+    }
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+
+    // Check if file is provided
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided.' });
+    }
+
+    // Validate file type (only images allowed for profile pictures)
+    if (!req.file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ error: 'Only image files are allowed for profile pictures.' });
+    }
+
+    // Find the agent
+    const agent = await Agent.findOne({ _id: decoded.id, deletedAt: null });
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    // Delete old profile picture from Cloudinary if it exists
+    if (agent.profilePic) {
+      try {
+        // Extract public ID from the Cloudinary URL
+        const urlParts = agent.profilePic.split('/');
+        const publicIdWithExtension = urlParts[urlParts.length - 1];
+        const publicId = `chat-uploads/${publicIdWithExtension.split('.')[0]}`;
+        await deleteFromCloudinary(publicId, 'image');
+      } catch (deleteError) {
+        console.error('Error deleting old profile picture:', deleteError);
+        // Continue with upload even if deletion fails
+      }
+    }
+
+    // Upload new profile picture to Cloudinary
+    const uploadResult = await uploadToCloudinary(req.file, {
+      folder: 'chat-uploads/profile-pictures',
+      transformation: [
+        { width: 300, height: 300, crop: 'fill' },
+        { quality: 'auto:good' }
+      ]
+    });
+
+    // Update agent's profile picture URL
+    agent.profilePic = uploadResult.url;
+    await agent.save();
+
+    res.json({
+      message: 'Profile picture updated successfully',
+      profilePic: uploadResult.url,
+      uploadDetails: {
+        publicId: uploadResult.publicId,
+        size: uploadResult.size,
+        format: uploadResult.format
+      }
+    });
+  } catch (err) {
+    console.error('Profile picture upload error:', err);
+    res.status(500).json({ error: 'Failed to upload profile picture. Please try again.' });
+  }
+};
+
+// Delete agent's profile picture
+const deleteProfilePicture = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided.' });
+    }
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+
+    // Find the agent
+    const agent = await Agent.findOne({ _id: decoded.id, deletedAt: null });
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    if (!agent.profilePic) {
+      return res.status(400).json({ error: 'No profile picture to delete.' });
+    }
+
+    // Delete profile picture from Cloudinary
+    try {
+      // Extract public ID from the Cloudinary URL
+      const urlParts = agent.profilePic.split('/');
+      const publicIdWithExtension = urlParts[urlParts.length - 1];
+      const publicId = `chat-uploads/profile-pictures/${publicIdWithExtension.split('.')[0]}`;
+      await deleteFromCloudinary(publicId, 'image');
+    } catch (deleteError) {
+      console.error('Error deleting profile picture from Cloudinary:', deleteError);
+      // Continue with database update even if Cloudinary deletion fails
+    }
+
+    // Remove profile picture URL from agent
+    agent.profilePic = null;
+    await agent.save();
+
+    res.json({ message: 'Profile picture deleted successfully' });
+  } catch (err) {
+    console.error('Profile picture delete error:', err);
+    res.status(500).json({ error: 'Failed to delete profile picture. Please try again.' });
+  }
+};
+
 module.exports = {
   createAgent,
   getAgents,
@@ -283,5 +401,7 @@ module.exports = {
   getAgentsByBusiness,
   searchAgents,
   updateAgentProfile,
-  changePassword
+  changePassword,
+  uploadProfilePicture,
+  deleteProfilePicture
 };

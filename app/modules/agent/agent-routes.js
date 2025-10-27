@@ -3,6 +3,7 @@ const router = express.Router();
 const agentController = require('./agent-controller');
 const statusRoutes = require('./agent-status-controller');
 const { getAgentStats } = require('../queue/queue-controller');
+const { upload } = require('../../services/fileUploadService');
 
 // Get Agent info using token
 router.get('/info', agentController.getAgentInfo);
@@ -10,6 +11,10 @@ router.get('/info', agentController.getAgentInfo);
 router.put('/profile', agentController.updateAgentProfile);
 // Change agent's password
 router.post('/change-password', agentController.changePassword);
+// Upload/update profile picture
+router.post('/profile-picture', upload.single('profilePicture'), agentController.uploadProfilePicture);
+// Delete profile picture
+router.delete('/profile-picture', agentController.deleteProfilePicture);
 // Get agent statistics
 router.get('/:agentId/stats', getAgentStats);
 // Create agent
