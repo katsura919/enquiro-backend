@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const agentSchema = new mongoose.Schema({
   businessId: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', required: true },
   name: { type: String, required: true },
-  email: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
   phone: { type: String },
   profilePic: { type: String },
   password: { type: String, required: true },

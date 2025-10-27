@@ -29,16 +29,27 @@ const getAgentInfo = async (req, res) => {
 // Create a new agent
 const createAgent = async (req, res) => {
   try {
-    const { password, ...rest } = req.body;
+    const { password, email, ...rest } = req.body;
     if (!password) {
       return res.status(400).json({ error: 'Password is required.' });
     }
+
+    // Check if email already exists (manual check as fallback)
+    const existingAgent = await Agent.findOne({ email: email });
+    if (existingAgent) {
+      return res.status(409).json({ error: 'Email address is already taken. Please use a different email.' });
+    }
+
     const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash(password, 10);
-    const agent = new Agent({ ...rest, password: hashedPassword });
+    const agent = new Agent({ email, ...rest, password: hashedPassword });
     await agent.save();
     res.status(201).json(agent);
   } catch (err) {
+    // Check if it's a duplicate key error (email already exists)
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+      return res.status(409).json({ error: 'Email address is already taken. Please use a different email.' });
+    }
     res.status(400).json({ error: err.message });
   }
 };
