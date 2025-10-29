@@ -1,10 +1,10 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const sessionSchema = new mongoose.Schema(
   {
     businessId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Business',
+      ref: "Business",
       required: true,
     },
     customerDetails: {
@@ -18,4 +18,4 @@ const sessionSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model('Session', sessionSchema);
+module.exports = mongoose.model("Session", sessionSchema);
