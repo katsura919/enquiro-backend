@@ -23,7 +23,7 @@ router.post("/complete-registration", userAuthController.completeRegistration);
 // Resend verification code
 router.post("/resend-code", userAuthController.resendVerificationCode);
 
-// Admin login 
+// Admin login
 router.post(
   "/login",
   createRateLimit(
@@ -33,6 +33,12 @@ router.post(
   ),
   userAuthController.login
 );
+
+// OTP verification for login
+router.post("/verify-login-otp", userAuthController.verifyLoginOtp);
+
+// Resend OTP for login
+router.post("/resend-login-otp", userAuthController.resendLoginOtp);
 
 // Confirm email (legacy - for existing token-based confirmations)
 router.get("/confirm-email", userAuthController.confirmEmail);

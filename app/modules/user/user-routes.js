@@ -1,65 +1,56 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const userController = require('./user-controller');
-const authMiddleware  = require('../../middleware/authMiddleware');
-const {createUserValidation, updateUserValidation} = require('../../utils/validation/userValidation');
-const handleValidationErrors = require('../../utils/validation/validationErrorHandler');
+const userController = require("./user-controller");
+const authMiddleware = require("../../middleware/authMiddleware");
+const {
+  createUserValidation,
+  updateUserValidation,
+} = require("../../utils/validation/userValidation");
+const handleValidationErrors = require("../../utils/validation/validationErrorHandler");
 
+// Import OTP routes
+const otpRoutes = require("./otp-routes");
 
 // Fetch user info using JWT token
-router.get('/info', 
-    authMiddleware,
-    userController.getUserInfoByToken
-);
+router.get("/info", authMiddleware, userController.getUserInfoByToken);
 
 // Change user password
-router.post('/change-password', 
-    authMiddleware,
-    userController.changePassword
-);
+router.post("/change-password", authMiddleware, userController.changePassword);
 
 // Forgot password - Request password reset
-router.post('/forgot-password', 
-    userController.forgotPassword
-);
+router.post("/forgot-password", userController.forgotPassword);
 
 // Reset password with token
-router.post('/reset-password', 
-    userController.resetPassword
-);
+router.post("/reset-password", userController.resetPassword);
 
 // Create a user
-router.post('/', 
-    authMiddleware,
-    createUserValidation,
-    handleValidationErrors, 
-    userController.createUser
+router.post(
+  "/",
+  authMiddleware,
+  createUserValidation,
+  handleValidationErrors,
+  userController.createUser
 );
 
 // Get all users
-router.get('/', 
-    authMiddleware,
-    userController.getUsers
-);
+router.get("/", authMiddleware, userController.getUsers);
 
 // Get a user by ID
-router.get('/:id', 
-    authMiddleware,
-    userController.getUserById
-);
+router.get("/:id", authMiddleware, userController.getUserById);
 
 // Update a user by ID
-router.put('/:id', 
-    authMiddleware,
-    updateUserValidation,
-    handleValidationErrors, 
-    userController.updateUser
+router.put(
+  "/:id",
+  authMiddleware,
+  updateUserValidation,
+  handleValidationErrors,
+  userController.updateUser
 );
 
 // Delete a user by ID
-router.delete('/:id', 
-    authMiddleware,
-    userController.deleteUser
-);
+router.delete("/:id", authMiddleware, userController.deleteUser);
+
+// OTP routes
+router.use("/otp", otpRoutes);
 
 module.exports = router;
