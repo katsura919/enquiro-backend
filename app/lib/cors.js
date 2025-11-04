@@ -6,7 +6,9 @@ const allowedOrigins = [
   "https://admin-codey.vercel.app",
   "https://enquiro.vercel.app",
   "https://agent-enquiro.vercel.app",
-  "https://enquiro-admin-web.onrender.com"
+  "https://enquiro-admin-web.onrender.com",
+  "https://enq-admin.vercel.app",
+  "https://enq-agent.vercel.app",
 ];
 
 const corsOptions = {
