@@ -1,23 +1,23 @@
-const Session = require('../../models/session-model');
-const Business = require('../../models/business-model');
+const Session = require("../../models/session-model");
+const Business = require("../../models/business-model");
 
 // Create a session
 const createSession = async (req, res) => {
   try {
     const { businessId, customerDetails } = req.body;
     if (!businessId) {
-      return res.status(400).json({ error: 'businessId is required.' });
+      return res.status(400).json({ error: "businessId is required." });
     }
     const businessExists = await Business.findById(businessId);
     if (!businessExists) {
-      return res.status(404).json({ error: 'Business not found.' });
+      return res.status(404).json({ error: "Business not found." });
     }
     const session = new Session({ businessId, customerDetails });
     await session.save();
     res.status(201).json(session);
   } catch (err) {
-    console.error('Error creating session:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error creating session:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -25,11 +25,60 @@ const createSession = async (req, res) => {
 const getSessionsByBusiness = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const sessions = await Session.find({ businessId }).sort({ createdAt: -1 });
-    res.json(sessions);
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    // Build search query
+    const query = { businessId };
+
+    // Add search functionality for customer details
+    if (search) {
+      query.$or = [
+        { "customerDetails.name": { $regex: search, $options: "i" } },
+        { "customerDetails.email": { $regex: search, $options: "i" } },
+        { "customerDetails.phone": { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === "asc" ? 1 : -1;
+
+    // Execute query with pagination
+    const [sessions, totalCount] = await Promise.all([
+      Session.find(query).sort(sort).skip(skip).limit(limitNum),
+      Session.countDocuments(query),
+    ]);
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    res.json({
+      data: sessions,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalCount,
+        limit: limitNum,
+        hasNextPage,
+        hasPrevPage,
+      },
+    });
   } catch (err) {
-    console.error('Error fetching sessions:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error fetching sessions:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -38,11 +87,11 @@ const getSessionById = async (req, res) => {
   try {
     const { id } = req.params;
     const session = await Session.findById(id);
-    if (!session) return res.status(404).json({ error: 'Session not found.' });
+    if (!session) return res.status(404).json({ error: "Session not found." });
     res.json(session);
   } catch (err) {
-    console.error('Error fetching session by ID:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error fetching session by ID:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -56,11 +105,11 @@ const updateSession = async (req, res) => {
       { customerDetails },
       { new: true, runValidators: true }
     );
-    if (!session) return res.status(404).json({ error: 'Session not found.' });
+    if (!session) return res.status(404).json({ error: "Session not found." });
     res.json(session);
   } catch (err) {
-    console.error('Error updating session:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error updating session:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -69,11 +118,11 @@ const deleteSession = async (req, res) => {
   try {
     const { id } = req.params;
     const session = await Session.findByIdAndDelete(id);
-    if (!session) return res.status(404).json({ error: 'Session not found.' });
-    res.json({ message: 'Session deleted successfully.' });
+    if (!session) return res.status(404).json({ error: "Session not found." });
+    res.json({ message: "Session deleted successfully." });
   } catch (err) {
-    console.error('Error deleting session:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error deleting session:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -82,5 +131,5 @@ module.exports = {
   getSessionsByBusiness,
   getSessionById,
   updateSession,
-  deleteSession
+  deleteSession,
 };
