@@ -16,9 +16,7 @@ const {
   ESCALATION_TIERS,
   calculateResponseConfidence,
   INTENT_TYPES,
-  CONVERSATION_STATES,
   recognizeIntent,
-  getConversationState,
 } = require("./chat-utils");
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -27,132 +25,15 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // This works alongside our database sessions for persistence
 const chatSessions = new Map();
 
-// Enhanced prompt construction with better structure and natural responses
-const constructPrompt = ({ query, knowledge, isEscalation, businessName }) => `
-You are working for ${businessName} company. Be a friendly and helpful AI assistant. Act like a real, knowledgeable person.
-
-IMPORTANT: Before responding, check if the business information below actually answers the customer's specific question. If it doesn't, be honest and say you don't have that information.
-
-${
-  !isEscalation && knowledge?.length > 0
-    ? `**Available Business Information:**
-${knowledge
-  .map((k, i) => {
-    // Handle different data types with appropriate fields
-    let title,
-      content,
-      category = "";
-
-    if (k.type === "faq") {
-      title = k.question || "FAQ";
-      content = k.answer || "";
-      category = k.category ? ` (FAQ - ${k.category})` : " (FAQ)";
-    } else if (k.type === "product") {
-      title = k.name || "Product";
-      content = k.description || "";
-      category = k.category ? ` (Product - ${k.category})` : " (Product)";
-
-      // Handle price object structure
-      if (k.price?.amount) {
-        const currency = k.price.currency || "USD";
-        content += ` | Price: ${currency} ${k.price.amount}`;
-      }
-      // Add SKU if available
-      if (k.sku) {
-        content += ` | SKU: ${k.sku}`;
-      }
-      // Add quantity/availability
-      if (k.quantity !== undefined) {
-        content += ` | ${
-          k.quantity > 0 ? `In Stock (${k.quantity})` : "Out of Stock"
-        }`;
-      }
-    } else if (k.type === "service") {
-      title = k.name || "Service";
-      content = k.description || "";
-      category = k.category ? ` (Service - ${k.category})` : " (Service)";
-
-      // Handle pricing object structure
-      if (k.pricing) {
-        if (k.pricing.type === "quote") {
-          content += ` | Pricing: Contact for Quote`;
-        } else if (k.pricing.amount) {
-          const currency = k.pricing.currency || "USD";
-          const pricingType = k.pricing.type || "fixed";
-          const typeLabel =
-            pricingType === "hourly"
-              ? "/hour"
-              : pricingType === "package"
-              ? " (package)"
-              : "";
-          content += ` | Price: ${currency} ${k.pricing.amount}${typeLabel}`;
-        }
-      }
-      // Add duration if available
-      if (k.duration) {
-        content += ` | Duration: ${k.duration}`;
-      }
-    } else if (k.type === "policy") {
-      title = k.title || "Policy";
-      content = k.content || "";
-      category = k.type ? ` (Policy - ${k.type})` : " (Policy)";
-    } else {
-      // Fallback for other types
-      title = k.title || k.name || "Information";
-      content = k.content || k.description || "";
-      if (k.categoryId?.name) {
-        category = ` (${k.categoryId.name})`;
-      }
-    }
-
-    return `${i + 1}. **${title}**${category}: ${content}`;
-  })
-  .join("\n")}
-
-`
-    : ""
-}
-
-**Current Customer Question:**
-${query}
-
-**Response Guidelines:**
-${
-  isEscalation
-    ? `- The customer explicitly wants to speak with a human
-- Acknowledge their request professionally and connect them`
-    : `- Be CONCISE and DIRECT - get straight to the point
-- Answer in 2-3 sentences maximum unless more detail is specifically requested
-- CRITICAL: ONLY use the business information provided if it DIRECTLY answers the customer's specific question
-- If the provided information doesn't address their question, be honest and say you don't have that information
-- Do NOT claim to have knowledge about general topics (services, products, FAQs) unless you have specific relevant information
-- When you don't have relevant information, respond honestly:
-  * "I don't have information about that specific topic."
-  * "I don't have details about that."
-  * "I'm not able to help with that particular question."
-- Be conversational but brief and honest
-- Avoid unnecessary phrases like "That's a great question!" or "I'd love to help!"
-- Skip filler words and get to the answer immediately
-- Never claim to have access to information categories unless you're providing specific relevant details
-- Only suggest speaking with someone if the customer seems frustrated or explicitly asks`
-}
-`;
-
 // Enhanced escalation detection with intelligent scoring
 const checkEscalationNeeded = async (query, model, sessionData = {}) => {
   // Calculate escalation score (without history dependency)
   const escalationScore = calculateEscalationScore(query, [], sessionData);
   const currentIntent = recognizeIntent(query, []);
-  const conversationState = getConversationState(
-    [],
-    currentIntent,
-    escalationScore
-  );
 
   console.log(`Escalation Analysis:
     Score: ${escalationScore}/100
     Intent: ${currentIntent}
-    State: ${conversationState}
     Threshold: ${
       escalationScore >= ESCALATION_TIERS.TIER_4.threshold
         ? "IMMEDIATE"
@@ -166,7 +47,6 @@ const checkEscalationNeeded = async (query, model, sessionData = {}) => {
     shouldEscalate: escalationScore >= ESCALATION_TIERS.TIER_4.threshold,
     escalationScore,
     intent: currentIntent,
-    conversationState,
     escalationTier:
       escalationScore >= ESCALATION_TIERS.TIER_4.threshold
         ? "TIER_4"
@@ -209,15 +89,6 @@ const getEscalationLink = (liveChatEnabled, linkType = "new", params = {}) => {
       console.log("🔗 Generated form new link:", link);
       return link;
     }
-  }
-};
-
-// Helper function to generate escalation message based on live chat settings
-const getEscalationMessage = (liveChatEnabled) => {
-  if (liveChatEnabled) {
-    return "You'll be connected with an available agent shortly.";
-  } else {
-    return "Our live chat is currently not available. Please fill out the form to submit your case, and our team will get back to you as soon as possible.";
   }
 };
 
@@ -644,7 +515,6 @@ Keep it brief and professional.`;
           sessionId: session._id,
         }), // Count from database
         customerIntent: customerIntent,
-        conversationState: escalationAnalysis.conversationState,
         responseConfidence: responseConfidence,
         escalationScore: escalationAnalysis.escalationScore,
         escalationTier: escalationAnalysis.escalationTier,

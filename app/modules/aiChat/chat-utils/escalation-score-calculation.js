@@ -11,7 +11,7 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
   let score = 0;
   const lowerQuery = query.toLowerCase();
   
-  // Factor 1: Explicit human requests (+100 - immediate escalation)
+  // Factor 1: Explicit human requests 
   const explicitKeywords = [
     'speak to human', 'talk to person', 'escalate', 'supervisor', 
     'manager', 'representative', 'agent', 'support team',
@@ -22,7 +22,7 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
     score += 100;
   }
   
-  // Factor 2: Frustration indicators (+30-60)
+  // Factor 2: Frustration indicators
   const frustrationKeywords = [
     { words: ['angry', 'furious', 'outraged'], weight: 60 },
     { words: ['frustrated', 'annoyed', 'upset'], weight: 45 },
@@ -37,11 +37,11 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
     }
   });
   
-  // Factor 3: Repeated failed attempts (+20 per attempt)
+  // Factor 3: Repeated failed attempts 
   const escalationAttempts = sessionData.escalationAttempts || 0;
   score += escalationAttempts * 20;
   
-  // Factor 4: Complex/urgent requests (+15-40)
+  // Factor 4: Complex/urgent requests
   const urgencyKeywords = [
     { words: ['urgent', 'emergency', 'asap', 'immediately'], weight: 40 },
     { words: ['important', 'critical', 'serious'], weight: 25 },
@@ -54,7 +54,7 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
     }
   });
   
-  // Factor 5: Conversation history context (+10-50)
+  // Factor 5: Conversation history context 
   if (recentHistory && recentHistory.length > 0) {
     const customerMessages = recentHistory.filter(msg => msg.role === 'user');
     const aiMessages = recentHistory.filter(msg => msg.role === 'assistant');
@@ -89,13 +89,13 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
       score += 50; // Third+ unhelpful response - significant increase
     }
     
-    // If conversation is getting long without resolution (5+ exchanges)
+    // If conversation is getting long without resolution 
     if (customerMessages.length >= 5 && unhelpfulResponses.length >= 2) {
-      score += 20; // Long conversation + multiple failures = definitely needs help
+      score += 20; 
     }
   }
   
-  // Factor 6: Missing critical information requests (+5-15)
+  // Factor 6: Missing critical information requests 
   const criticalInfoKeywords = [
     'price', 'cost', 'appointment', 'booking', 'schedule', 
     'availability', 'order', 'delivery', 'contact', 'phone', 'email'
@@ -105,7 +105,7 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
     score += 10;
   }
   
-  // Factor 7: Complex topics that require human intervention (+40-70)
+  // Factor 7: Complex topics that require human intervention
   const complexTopics = [
     // Returns and refunds
     { words: ['return', 'refund', 'money back'], weight: 60 },
@@ -134,7 +134,7 @@ const calculateEscalationScore = (query, recentHistory, sessionData = {}) => {
     }
   });
   
-  return Math.min(score, 100); // Cap at 100
+  return Math.min(score, 100); 
 };
 
 module.exports = {
