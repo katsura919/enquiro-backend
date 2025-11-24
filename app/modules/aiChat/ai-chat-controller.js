@@ -27,35 +27,108 @@ const chatSessions = new Map();
 
 // Enhanced escalation detection with intelligent scoring
 const checkEscalationNeeded = async (query, model, sessionData = {}) => {
-  // Calculate escalation score (without history dependency)
-  const escalationScore = calculateEscalationScore(query, [], sessionData);
-  const currentIntent = recognizeIntent(query, []);
+  // 1. Fast Path: Keyword-based scoring (existing)
+  // This catches obvious things like "talk to human" instantly without API latency
+  const keywordScore = calculateEscalationScore(query, [], sessionData);
+  const keywordIntent = recognizeIntent(query, []);
 
-  console.log(`Escalation Analysis:
-    Score: ${escalationScore}/100
-    Intent: ${currentIntent}
-    Threshold: ${
-      escalationScore >= ESCALATION_TIERS.TIER_4.threshold
-        ? "IMMEDIATE"
-        : escalationScore >= ESCALATION_TIERS.TIER_3.threshold
-        ? "OFFER"
-        : "HANDLE"
-    }`);
+  // If keyword score is already high enough for immediate escalation, skip LLM
+  if (keywordScore >= ESCALATION_TIERS.TIER_4.threshold) {
+    console.log(`⚡ Fast Escalation Triggered: Score ${keywordScore}`);
 
-  // Return escalation decision with context
-  return {
-    shouldEscalate: escalationScore >= ESCALATION_TIERS.TIER_4.threshold,
-    escalationScore,
-    intent: currentIntent,
-    escalationTier:
-      escalationScore >= ESCALATION_TIERS.TIER_4.threshold
-        ? "TIER_4"
-        : escalationScore >= ESCALATION_TIERS.TIER_3.threshold
-        ? "TIER_3"
-        : escalationScore >= ESCALATION_TIERS.TIER_2.threshold
-        ? "TIER_2"
-        : "TIER_1",
-  };
+    // Fix: Check for case keywords even if intent is ESCALATION_REQUEST
+    // The intent util might classify "speak to agent about case" as ESCALATION_REQUEST,
+    // but we still need to know it's a case followup.
+    const hasCaseKeywords =
+      /case|ticket|reference|follow.*up|status.*case|case.*status|escalation.*number|case.*number/i.test(
+        query
+      );
+
+    return {
+      shouldEscalate: true,
+      escalationScore: keywordScore,
+      intent: keywordIntent,
+      escalationTier: "TIER_4",
+      isCaseFollowup:
+        keywordIntent === INTENT_TYPES.CASE_FOLLOWUP || hasCaseKeywords,
+    };
+  }
+
+  // 2. Intelligent Path: LLM-based analysis
+  // Use a lightweight model to analyze sentiment and nuance that keywords miss
+  try {
+    const analysisChat = ai.chats.create({
+      model: "gemini-2.0-flash",
+      config: {
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.1, // Low temperature for consistent classification
+        },
+      },
+    });
+
+    const prompt = `
+      Analyze this customer message for a support chatbot.
+      Message: "${query}"
+      
+      Determine:
+      1. Escalation Score (0-100): 
+         - 0-30: Routine info request
+         - 31-70: Frustrated, confused, or complex issue (refunds, disputes)
+         - 71-100: Explicit human request, anger, legal threat, or emergency
+      2. Intent: Classify as one of [information_request, complaint, pricing_inquiry, escalation_request, case_followup, complex_issue]
+      3. Is Case Followup: True if user mentions an existing case, ticket, or previous conversation.
+
+      Return JSON: { "score": number, "intent": string, "isCaseFollowup": boolean, "reason": string }
+    `;
+
+    const result = await analysisChat.sendMessage({ message: prompt });
+    const analysis = JSON.parse(result.text);
+
+    // Take the higher of the two scores to be safe
+    const finalScore = Math.max(keywordScore, analysis.score);
+
+    console.log(`Escalation Analysis (Hybrid):
+      Keyword Score: ${keywordScore}
+      LLM Score: ${analysis.score} (${analysis.reason})
+      Final Score: ${finalScore}
+    `);
+
+    return {
+      shouldEscalate: finalScore >= ESCALATION_TIERS.TIER_4.threshold,
+      escalationScore: finalScore,
+      intent: analysis.intent || keywordIntent,
+      escalationTier:
+        finalScore >= ESCALATION_TIERS.TIER_4.threshold
+          ? "TIER_4"
+          : finalScore >= ESCALATION_TIERS.TIER_3.threshold
+          ? "TIER_3"
+          : finalScore >= ESCALATION_TIERS.TIER_2.threshold
+          ? "TIER_2"
+          : "TIER_1",
+      isCaseFollowup: analysis.isCaseFollowup,
+    };
+  } catch (error) {
+    console.error(
+      "Escalation analysis failed, falling back to keywords:",
+      error
+    );
+    // Fallback to keyword score if LLM fails
+    return {
+      shouldEscalate: keywordScore >= ESCALATION_TIERS.TIER_4.threshold,
+      escalationScore: keywordScore,
+      intent: keywordIntent,
+      escalationTier:
+        keywordScore >= ESCALATION_TIERS.TIER_4.threshold
+          ? "TIER_4"
+          : keywordScore >= ESCALATION_TIERS.TIER_3.threshold
+          ? "TIER_3"
+          : keywordScore >= ESCALATION_TIERS.TIER_2.threshold
+          ? "TIER_2"
+          : "TIER_1",
+      isCaseFollowup: keywordIntent === INTENT_TYPES.CASE_FOLLOWUP,
+    };
+  }
 };
 
 // Helper function to generate escalation link based on live chat settings
@@ -270,10 +343,13 @@ Only use the information provided above to answer questions. If you don't have t
 
     if (escalationAnalysis.shouldEscalate) {
       // Check if user is mentioning an existing case or follow-up
+      // Use LLM analysis if available, otherwise fallback to regex
       const hasCaseFollowupIntent =
-        /\b(existing case|my case|case number|follow up|followup|following up|check.*status|update.*case|case.*update|previous case|submitted case|ongoing case)\b/i.test(
-          query
-        );
+        escalationAnalysis.isCaseFollowup !== undefined
+          ? escalationAnalysis.isCaseFollowup
+          : /\b(existing case|my case|case number|follow up|followup|following up|check.*status|update.*case|case.*update|previous case|submitted case|ongoing case)\b/i.test(
+              query
+            );
 
       let linkType = "new";
       let escalationPrompt = "";
