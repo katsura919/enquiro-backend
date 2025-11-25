@@ -1,14 +1,13 @@
-
-const Escalation = require('../../models/escalation-model');
-const Business = require('../../models/business-model');
-const Session = require('../../models/session-model');
-const Activity = require('../../models/activity-model');
-const Agent = require('../../models/agent-model');
-const ChatbotSettings = require('../../models/chatbot-settings-model');
-const notificationService = require('../../services/notificationService');
-const { emitNotification } = require('../../lib/socketEvents/notif-socket');
-const { sendEscalationEmail } = require('../../services/escalationEmail');
-const mongoose = require('mongoose');
+const Escalation = require("../../models/escalation-model");
+const Business = require("../../models/business-model");
+const Session = require("../../models/session-model");
+const Activity = require("../../models/activity-model");
+const Agent = require("../../models/agent-model");
+const ChatbotSettings = require("../../models/chatbot-settings-model");
+const notificationService = require("../../services/notificationService");
+const { emitNotification } = require("../../lib/socketEvents/notif-socket");
+const { sendEscalationEmail } = require("../../services/escalationEmail");
+const mongoose = require("mongoose");
 
 // Helper function to generate a unique case number
 const generateUniqueCaseNumber = async () => {
@@ -24,19 +23,33 @@ const generateUniqueCaseNumber = async () => {
 // Create an escalation
 const createEscalation = async (req, res) => {
   try {
-    const { businessId, sessionId, customerName, customerEmail, customerPhone, concern, description } = req.body;
-    if (!businessId || !sessionId || !customerName || !customerEmail || !concern) {
-      return res.status(400).json({ error: 'Missing required fields.' });
+    const {
+      businessId,
+      sessionId,
+      customerName,
+      customerEmail,
+      customerPhone,
+      concern,
+      description,
+    } = req.body;
+    if (
+      !businessId ||
+      !sessionId ||
+      !customerName ||
+      !customerEmail ||
+      !concern
+    ) {
+      return res.status(400).json({ error: "Missing required fields." });
     }
 
     const business = await Business.findById(businessId);
     if (!business) {
-      return res.status(404).json({ error: 'Business not found.' });
+      return res.status(404).json({ error: "Business not found." });
     }
 
     const sessionExists = await Session.findById(sessionId);
     if (!sessionExists) {
-      return res.status(404).json({ error: 'Session not found.' });
+      return res.status(404).json({ error: "Session not found." });
     }
 
     // Check chatbot settings for live chat enablement
@@ -45,15 +58,15 @@ const createEscalation = async (req, res) => {
 
     const caseNumber = await generateUniqueCaseNumber();
 
-    const escalation = new Escalation({ 
-      businessId, 
-      sessionId, 
+    const escalation = new Escalation({
+      businessId,
+      sessionId,
       caseNumber,
-      customerName, 
-      customerEmail, 
-      customerPhone, 
-      concern, 
-      description
+      customerName,
+      customerEmail,
+      customerPhone,
+      concern,
+      description,
     });
     await escalation.save();
 
@@ -63,21 +76,24 @@ const createEscalation = async (req, res) => {
         businessId,
         caseId: escalation._id,
         caseTitle: concern,
-        casePriority: escalation.priority || 'medium',
+        casePriority: escalation.priority || "medium",
         customerId: sessionExists._id,
         customerName,
         agentId: null,
-        agentName: 'System'
+        agentName: "System",
       });
 
       // Emit notification via socket
-      const io = req.app.get('io');
+      const io = req.app.get("io");
       if (io) {
         emitNotification(io, businessId.toString(), notification);
-        console.log('[ESCALATION] Notification emitted for business:', businessId.toString());
+        console.log(
+          "[ESCALATION] Notification emitted for business:",
+          businessId.toString()
+        );
       }
     } catch (notifError) {
-      console.error('Error creating case notification:', notifError);
+      console.error("Error creating case notification:", notifError);
       // Don't fail the request if notification fails
     }
 
@@ -88,12 +104,12 @@ const createEscalation = async (req, res) => {
         customerName,
         caseNumber,
         concern,
-        business.name || 'Customer Support',
+        business.name || "Customer Support",
         business.logo || null // Pass the business logo URL
       );
-      console.log('[ESCALATION] Confirmation email sent to:', customerEmail);
+      console.log("[ESCALATION] Confirmation email sent to:", customerEmail);
     } catch (emailError) {
-      console.error('Error sending escalation email:', emailError);
+      console.error("Error sending escalation email:", emailError);
     }
 
     // Handle response based on live chat settings
@@ -112,7 +128,7 @@ const createEscalation = async (req, res) => {
         caseOwner: escalation.caseOwner,
         createdAt: escalation.createdAt,
         updatedAt: escalation.updatedAt,
-        enableLiveChat: true
+        enableLiveChat: true,
       });
     } else {
       // Form-only flow - return confirmation without email
@@ -120,13 +136,14 @@ const createEscalation = async (req, res) => {
         _id: escalation._id,
         caseNumber: escalation.caseNumber,
         enableLiveChat: false,
-        message: "Your support request has been submitted successfully. Our team will review it and get back to you.",
-        success: true
+        message:
+          "Your support request has been submitted successfully. Our team will review it and get back to you.",
+        success: true,
       });
     }
   } catch (err) {
-    console.error('Error creating escalation:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error creating escalation:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -134,33 +151,54 @@ const createEscalation = async (req, res) => {
 const getEscalationsByBusiness = async (req, res) => {
   try {
     const { businessId } = req.params;
-    const { status, search, page = 1, limit = 10 } = req.query;
+    const {
+      status,
+      search,
+      page = 1,
+      limit = 10,
+      startDate,
+      endDate,
+    } = req.query;
     const query = { businessId };
-    
+
     // Add status filter
-    if (status && status !== 'all') {
+    if (status && status !== "all") {
       query.status = status;
     }
-    
+
+    // Add date range filter
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        query.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        // Set end date to end of day (23:59:59)
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = endOfDay;
+      }
+    }
+
     // Add search functionality
     if (search && search.trim()) {
-      const searchRegex = new RegExp(search.trim(), 'i'); // Case-insensitive search
+      const searchRegex = new RegExp(search.trim(), "i"); // Case-insensitive search
       query.$or = [
         { caseNumber: searchRegex },
         { customerName: searchRegex },
         { customerEmail: searchRegex },
         { customerPhone: searchRegex },
         { concern: searchRegex },
-        { description: searchRegex }
+        { description: searchRegex },
       ];
     }
-    
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const escalations = await Escalation.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('caseOwner', 'name');
+      .populate("caseOwner", "name");
     const total = await Escalation.countDocuments(query);
     res.json({
       escalations,
@@ -169,10 +207,14 @@ const getEscalationsByBusiness = async (req, res) => {
       limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
       searchTerm: search || null, // Include search term in response for frontend reference
+      dateRange: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+      },
     });
   } catch (err) {
-    console.error('Error fetching escalations by business:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error fetching escalations by business:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -182,11 +224,11 @@ const getEscalationsBySession = async (req, res) => {
     const { sessionId } = req.params;
     const escalations = await Escalation.find({ sessionId })
       .sort({ createdAt: -1 })
-      .populate('caseOwner', 'name');
+      .populate("caseOwner", "name");
     res.json(escalations);
   } catch (err) {
-    console.error('Error fetching escalations by session:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error fetching escalations by session:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -195,36 +237,36 @@ const getEscalationsByCaseOwner = async (req, res) => {
   try {
     const { agentId } = req.params;
     const { status, page = 1, limit = 10 } = req.query;
-    
+
     // Verify agent exists
     const agent = await Agent.findById(agentId);
     if (!agent) {
-      return res.status(404).json({ error: 'Agent not found.' });
+      return res.status(404).json({ error: "Agent not found." });
     }
-    
+
     const query = { caseOwner: agentId };
-    
+
     // Add status filter if provided
-    if (status && status !== 'all') {
+    if (status && status !== "all") {
       query.status = status;
     }
-    
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const escalations = await Escalation.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('caseOwner', 'name');
-      
+      .populate("caseOwner", "name");
+
     const total = await Escalation.countDocuments(query);
-    
+
     // Get total case counts for this agent (all cases regardless of status filter)
     const totalCases = await Escalation.countDocuments({ caseOwner: agentId });
-    const totalResolvedCases = await Escalation.countDocuments({ 
-      caseOwner: agentId, 
-      status: 'resolved' 
+    const totalResolvedCases = await Escalation.countDocuments({
+      caseOwner: agentId,
+      status: "resolved",
     });
-    
+
     res.json({
       escalations,
       total,
@@ -232,15 +274,15 @@ const getEscalationsByCaseOwner = async (req, res) => {
       limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
       agentId,
-      status: status || 'all',
+      status: status || "all",
       counts: {
         totalCases,
-        totalResolvedCases
-      }
+        totalResolvedCases,
+      },
     });
   } catch (err) {
-    console.error('Error fetching escalations by case owner:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error fetching escalations by case owner:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -248,12 +290,16 @@ const getEscalationsByCaseOwner = async (req, res) => {
 const getEscalationById = async (req, res) => {
   try {
     const { id } = req.params;
-    const escalation = await Escalation.findById(id).populate('caseOwner', 'name');
-    if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
+    const escalation = await Escalation.findById(id).populate(
+      "caseOwner",
+      "name"
+    );
+    if (!escalation)
+      return res.status(404).json({ error: "Escalation not found." });
     res.json(escalation);
   } catch (err) {
-    console.error('Error fetching escalation by ID:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error fetching escalation by ID:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -261,17 +307,34 @@ const getEscalationById = async (req, res) => {
 const updateEscalation = async (req, res) => {
   try {
     const { id } = req.params;
-    const { caseNumber, customerName, customerEmail, customerPhone, concern, description, caseOwner } = req.body;
+    const {
+      caseNumber,
+      customerName,
+      customerEmail,
+      customerPhone,
+      concern,
+      description,
+      caseOwner,
+    } = req.body;
     const escalation = await Escalation.findByIdAndUpdate(
       id,
-      { caseNumber, customerName, customerEmail, customerPhone, concern, description, caseOwner },
+      {
+        caseNumber,
+        customerName,
+        customerEmail,
+        customerPhone,
+        concern,
+        description,
+        caseOwner,
+      },
       { new: true, runValidators: true }
     );
-    if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
+    if (!escalation)
+      return res.status(404).json({ error: "Escalation not found." });
     res.json(escalation);
   } catch (err) {
-    console.error('Error updating escalation:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error updating escalation:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -280,11 +343,12 @@ const deleteEscalation = async (req, res) => {
   try {
     const { id } = req.params;
     const escalation = await Escalation.findByIdAndDelete(id);
-    if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
-    res.json({ message: 'Escalation deleted successfully.' });
+    if (!escalation)
+      return res.status(404).json({ error: "Escalation not found." });
+    res.json({ message: "Escalation deleted successfully." });
   } catch (err) {
-    console.error('Error deleting escalation:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error deleting escalation:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -294,13 +358,18 @@ const updateEscalationStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!status || !['escalated', 'resolved', 'pending'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be "escalated", "resolved", or "pending".' });
+    if (!status || !["escalated", "resolved", "pending"].includes(status)) {
+      return res
+        .status(400)
+        .json({
+          error:
+            'Invalid status. Must be "escalated", "resolved", or "pending".',
+        });
     }
 
     const currentEscalation = await Escalation.findById(id);
     if (!currentEscalation) {
-      return res.status(404).json({ error: 'Escalation not found.' });
+      return res.status(404).json({ error: "Escalation not found." });
     }
 
     const previousStatus = currentEscalation.status;
@@ -313,15 +382,17 @@ const updateEscalationStatus = async (req, res) => {
 
     const activity = new Activity({
       escalationId: id,
-      action: 'Change Status',
-      details: `Set status from ${previousStatus.charAt(0).toUpperCase() + previousStatus.slice(1)} to ${status.charAt(0).toUpperCase() + status.slice(1)}.`
+      action: "Change Status",
+      details: `Set status from ${
+        previousStatus.charAt(0).toUpperCase() + previousStatus.slice(1)
+      } to ${status.charAt(0).toUpperCase() + status.slice(1)}.`,
     });
     await activity.save();
 
     res.json(escalation);
   } catch (err) {
-    console.error('Error updating escalation status:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error updating escalation status:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -330,42 +401,45 @@ const updateCaseOwner = async (req, res) => {
   try {
     const { id } = req.params;
     const { caseOwner } = req.body;
-    
+
     // Handle case where caseOwner is empty string (unassigned)
     const caseOwnerValue = caseOwner === "" ? null : caseOwner;
-    
+
     // If caseOwner is provided and not null, verify it's a valid agent
     if (caseOwnerValue) {
       const agent = await Agent.findById(caseOwnerValue);
       if (!agent) {
-        return res.status(400).json({ error: 'Invalid agent ID. Agent not found.' });
+        return res
+          .status(400)
+          .json({ error: "Invalid agent ID. Agent not found." });
       }
     }
-    
+
     const escalation = await Escalation.findByIdAndUpdate(
       id,
       { caseOwner: caseOwnerValue },
       { new: true, runValidators: true }
-    ).populate('caseOwner', 'name');
-    
-    if (!escalation) return res.status(404).json({ error: 'Escalation not found.' });
-    
+    ).populate("caseOwner", "name");
+
+    if (!escalation)
+      return res.status(404).json({ error: "Escalation not found." });
+
     // Log the case owner change activity
-    const activityDetails = caseOwnerValue 
-      ? `Case assigned to ${escalation.caseOwner?.name || 'agent'}`
-      : 'Case unassigned';
-      
+    const activityDetails = caseOwnerValue
+      ? `Case assigned to ${escalation.caseOwner?.name || "agent"}`
+      : "Case unassigned";
+
     const activity = new Activity({
       escalationId: id,
-      action: caseOwnerValue ? 'Case Owner Assigned' : 'Case Owner Unassigned',
-      details: activityDetails
+      action: caseOwnerValue ? "Case Owner Assigned" : "Case Owner Unassigned",
+      details: activityDetails,
     });
     await activity.save();
-    
+
     res.json({ success: true, data: escalation });
   } catch (err) {
-    console.error('Error updating case owner:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error updating case owner:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -373,42 +447,42 @@ const updateCaseOwner = async (req, res) => {
 const countEscalationsByBusiness = async (req, res) => {
   try {
     const { businessId } = req.params;
-    
+
     // Verify business exists
     const business = await Business.findById(businessId);
     if (!business) {
-      return res.status(404).json({ error: 'Business not found.' });
+      return res.status(404).json({ error: "Business not found." });
     }
-    
+
     // Count escalations grouped by status
     const statusCounts = await Escalation.aggregate([
       { $match: { businessId: new mongoose.Types.ObjectId(businessId) } },
       {
         $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
     ]);
-    
+
     // Initialize counts for all possible statuses
     const result = {
       total: 0,
       escalated: 0,
       resolved: 0,
-      pending: 0
+      pending: 0,
     };
-    
+
     // Fill in actual counts
-    statusCounts.forEach(item => {
+    statusCounts.forEach((item) => {
       result[item._id] = item.count;
       result.total += item.count;
     });
-    
+
     res.json(result);
   } catch (err) {
-    console.error('Error counting escalations by business:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error counting escalations by business:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
@@ -419,21 +493,25 @@ const getEscalationByCaseNumber = async (req, res) => {
     const { businessId } = req.query;
 
     if (!caseNumber) {
-      return res.status(400).json({ error: 'Case number is required.' });
+      return res.status(400).json({ error: "Case number is required." });
     }
 
     if (!businessId) {
-      return res.status(400).json({ error: 'Business ID is required.' });
+      return res.status(400).json({ error: "Business ID is required." });
     }
 
     // Find escalation by case number and business ID
-    const escalation = await Escalation.findOne({ 
-      caseNumber, 
-      businessId 
-    }).populate('sessionId', 'customerDetails');
+    const escalation = await Escalation.findOne({
+      caseNumber,
+      businessId,
+    }).populate("sessionId", "customerDetails");
 
     if (!escalation) {
-      return res.status(404).json({ error: 'Case not found. Please check your case number and try again.' });
+      return res
+        .status(404)
+        .json({
+          error: "Case not found. Please check your case number and try again.",
+        });
     }
 
     // Return escalation data for case continuation
@@ -450,24 +528,24 @@ const getEscalationByCaseNumber = async (req, res) => {
       status: escalation.status,
       caseOwner: escalation.caseOwner,
       createdAt: escalation.createdAt,
-      updatedAt: escalation.updatedAt
+      updatedAt: escalation.updatedAt,
     });
   } catch (err) {
-    console.error('Error getting escalation by case number:', err);
-    res.status(500).json({ error: 'Server error.' });
+    console.error("Error getting escalation by case number:", err);
+    res.status(500).json({ error: "Server error." });
   }
 };
 
-module.exports = { 
-  createEscalation, 
-  getEscalationsByBusiness, 
-  getEscalationsBySession, 
+module.exports = {
+  createEscalation,
+  getEscalationsByBusiness,
+  getEscalationsBySession,
   getEscalationsByCaseOwner,
-  getEscalationById, 
-  updateEscalation, 
-  deleteEscalation, 
+  getEscalationById,
+  updateEscalation,
+  deleteEscalation,
   updateEscalationStatus,
   updateCaseOwner,
   countEscalationsByBusiness,
-  getEscalationByCaseNumber
+  getEscalationByCaseNumber,
 };
