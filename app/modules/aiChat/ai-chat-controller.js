@@ -14,7 +14,6 @@ const {
 const {
   calculateEscalationScore,
   ESCALATION_TIERS,
-  calculateResponseConfidence,
   INTENT_TYPES,
   recognizeIntent,
 } = require("./chat-utils");
@@ -258,13 +257,6 @@ const askAI = async (req, res) => {
       escalationAttempts: 0, // This should be tracked in session model
     };
 
-    // Calculate response confidence (without manual history)
-    const responseConfidence = calculateResponseConfidence(
-      query,
-      combinedData,
-      []
-    );
-
     // Create system instruction with business context
     const systemInstruction = `You are a friendly, helpful, and professional customer service chatbot for ${
       business.name
@@ -284,7 +276,7 @@ ${
             category = k.category ? ` (FAQ - ${k.category})` : " (FAQ)";
           } else if (k.type === "product") {
             title = k.name || "Product";
-            content = k.description || "";
+            content = k.description || "Available product";
             category = k.category ? ` (Product - ${k.category})` : " (Product)";
 
             if (k.price?.amount) {
@@ -340,7 +332,11 @@ ${
     : "No specific business information available."
 }
 
-Only use the information provided above to answer questions. If you don't have the information, politely say so.`;
+When answering questions about products or services, list what is available even if detailed descriptions are not provided. Only use the information provided above to answer questions. If specific details are not available, mention what you do know and offer to ${
+      liveChatEnabled
+        ? "connect them with a representative"
+        : "have them submit an inquiry"
+    } for more information.`;
 
     // Enhanced escalation check with intelligent scoring
     const escalationAnalysis = await checkEscalationNeeded(
@@ -425,35 +421,27 @@ Keep it brief and professional.`;
       // Always use chat session regardless of data availability
       console.log("🎯 Response Decision:");
       console.log("Data available:", combinedData?.length || 0, "items");
-      console.log("Response confidence:", responseConfidence);
 
       let chat;
       let currentSessionId = session._id.toString();
 
-      if (chatSessions.has(currentSessionId)) {
-        // Continue existing session
-        chat = chatSessions.get(currentSessionId);
-        console.log("🔄 Resuming existing chat session");
-      } else {
-        // Start a new chat session
-        chat = ai.chats.create({
-          model: "gemini-2.0-flash",
-          config: {
-            systemInstruction: systemInstruction,
-            generationConfig: {
-              temperature: 0.5, // Lower temperature for more focused, concise responses
-              topP: 0.8, // Reduced for less verbose output
-              maxOutputTokens: 500, // Reduced from 2000 to encourage brevity
-            },
+      // Always create a fresh chat session with updated system instruction
+      // This ensures the AI has access to the current relevant data for each query
+      chat = ai.chats.create({
+        model: "gemini-2.0-flash",
+        config: {
+          systemInstruction: systemInstruction,
+          generationConfig: {
+            temperature: 0.5, // Lower temperature for more focused, concise responses
+            topP: 0.8, // Reduced for less verbose output
+            maxOutputTokens: 500, // Reduced from 2000 to encourage brevity
           },
-        });
-        chatSessions.set(currentSessionId, chat);
-        console.log("🆕 Starting new chat session");
-      }
+        },
+      });
+      chatSessions.set(currentSessionId, chat);
+      console.log("🆕 Created fresh chat session with updated data");
 
-      console.log(
-        `✅ Using chat session - Response Confidence: ${responseConfidence}%`
-      );
+      console.log("✅ Using chat session");
       console.log("📝 QUERY SENT TO CHAT:", query.trim());
 
       // Send message and get response using Google's new chat API
@@ -482,27 +470,8 @@ Keep it brief and professional.`;
         }
       }
 
-      // Proactive escalation: Offer help if confidence is very low or repeated failures detected
+      // Proactive escalation: Offer help for complex topics
       if (!escalationGenerated) {
-        // Check for low confidence response (below 30%)
-        if (
-          responseConfidence < 30 &&
-          escalationAnalysis.escalationScore >=
-            ESCALATION_TIERS.TIER_2.threshold
-        ) {
-          console.log(
-            `🔔 Proactive escalation triggered: Low confidence (${responseConfidence}%) + Escalation score ${escalationAnalysis.escalationScore}`
-          );
-          responseText += `\n\nWould you like to ${getEscalationLink(
-            liveChatEnabled,
-            "new"
-          )}?`;
-          escalationGenerated = true;
-        }
-
-        // Note: Since we no longer have explicit history, we can't check for repeated unhelpful responses
-        // The Gemini chat session will handle this naturally through conversation context
-
         // Check for complex topics that need human intervention
         const lowerQuery = query.toLowerCase();
         const complexTopics = [
@@ -602,7 +571,6 @@ Keep it brief and professional.`;
           sessionId: session._id,
         }), // Count from database
         customerIntent: customerIntent,
-        responseConfidence: responseConfidence,
         escalationScore: escalationAnalysis.escalationScore,
         escalationTier: escalationAnalysis.escalationTier,
         qualityScore: qualityScore,

@@ -3,7 +3,6 @@ const {
   calculateEscalationScore,
   ESCALATION_TIERS,
 } = require("./escalation-score-calculation");
-const calculateResponseConfidence = require("./confidence-utils");
 const {
   extractCaseNumber,
   getEscalationCaseStatus,
@@ -20,7 +19,6 @@ const {
 module.exports = {
   calculateEscalationScore,
   ESCALATION_TIERS,
-  calculateResponseConfidence,
   extractCaseNumber,
   getEscalationCaseStatus,
   getEscalationForLiveChat,
