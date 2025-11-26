@@ -86,9 +86,17 @@ const getAgentById = async (req, res) => {
 // Update agent
 const updateAgent = async (req, res) => {
   try {
+    const updateData = { ...req.body };
+
+    // If password is being updated, hash it
+    if (updateData.password) {
+      const bcrypt = require("bcryptjs");
+      updateData.password = await bcrypt.hash(updateData.password, 10);
+    }
+
     const agent = await Agent.findOneAndUpdate(
       { _id: req.params.id, deletedAt: null },
-      req.body,
+      updateData,
       { new: true }
     );
     if (!agent) return res.status(404).json({ error: "Agent not found" });
