@@ -17,6 +17,9 @@ const LISTING_INTENT_PATTERNS = {
     /can\s+i\s+(see|view|browse)\s+(your\s+)?(products?|items?)/i,
     /what\s+(do|can)\s+(you|i)\s+(sell|buy|purchase|get)/i,
     /browse\s+(your\s+)?(products?|items?|catalog)/i,
+    /view\s+(all\s+)?(your\s+)?(products?|items?)/i,
+    /\b(products?|items?)\s+list/i,
+    /what.*\b(available|in\s+stock)\b/i,
   ],
   service: [
     /what\s+services?\s+(do|does|can)\s+(you|i)\s+(provide|offer|have|get)/i,
@@ -26,6 +29,8 @@ const LISTING_INTENT_PATTERNS = {
     /do\s+you\s+(provide|have|offer)\s+(any\s+)?services?/i,
     /can\s+i\s+(see|view|browse)\s+(your\s+)?services?/i,
     /browse\s+(your\s+)?services?/i,
+    /view\s+(all\s+)?(your\s+)?services?/i,
+    /\b(services?)\s+list/i,
   ],
   policy: [
     /what\s+(is|are)\s+(your\s+)?(policies|policy)/i,
@@ -34,6 +39,7 @@ const LISTING_INTENT_PATTERNS = {
     /do\s+you\s+have\s+(any\s+)?(policies|policy)/i,
     /can\s+i\s+(see|view|read)\s+(your\s+)?(policies|policy)/i,
     /what\s+(are|is)\s+(the\s+)?(return|refund|shipping|privacy|terms)\s+(policy|policies)/i,
+    /tell\s+me\s+about\s+(your\s+)?(policies|policy)/i,
   ],
   faq: [
     /what\s+(are|is)\s+(your\s+)?(frequently\s+asked\s+questions?|faqs?)/i,
@@ -42,6 +48,7 @@ const LISTING_INTENT_PATTERNS = {
     /do\s+you\s+have\s+(any\s+)?(frequently\s+asked\s+questions?|faqs?)/i,
     /can\s+i\s+(see|view)\s+(your\s+)?(frequently\s+asked\s+questions?|faqs?)/i,
     /common\s+questions?/i,
+    /help\s+(me\s+)?(with\s+)?questions?/i,
   ],
 };
 
@@ -169,7 +176,7 @@ const buildTextSearchQuery = (
   collectionType,
   options = {}
 ) => {
-  const { maxResults = 8 } = options;
+  const { maxResults = 2 } = options;
 
   // Check for listing intent BEFORE cleaning the query
   // This preserves context like "what products do you sell"
@@ -188,7 +195,7 @@ const buildTextSearchQuery = (
     return {
       filter: baseFilter,
       sort: { createdAt: -1 },
-      limit: 20, // Higher limit for listing queries
+      limit: 2, // Limit per collection to avoid overwhelming AI model
       isListingQuery: true, // Flag for logging purposes
     };
   }
@@ -295,6 +302,7 @@ const searchMultipleCollections = async (businessId, query, collections) => {
       ...item,
       type,
       relevanceScore: calculateRelevanceScore(item, query, type),
+      isListingQuery: searchQuery.isListingQuery, // Pass through listing flag
     }));
   });
 
@@ -304,9 +312,16 @@ const searchMultipleCollections = async (businessId, query, collections) => {
   const flatResults = allResults.flat();
   console.log("Total results from all collections:", flatResults.length);
 
+  // Check if ANY result is from a listing query
+  const hasListingIntent = flatResults.some((r) => r.isListingQuery);
+
+  // For listing queries, return up to 8 combined (2 per collection x 4)
+  // For specific searches, limit to 8 most relevant
+  const resultLimit = hasListingIntent ? 8 : 8;
+
   return flatResults
     .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
-    .slice(0, 8);
+    .slice(0, resultLimit);
 };
 
 /**
