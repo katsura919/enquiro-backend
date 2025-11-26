@@ -4,6 +4,63 @@
  */
 
 /**
+ * Intent patterns for detecting listing queries
+ * These queries should return all items from a category instead of keyword search
+ */
+const LISTING_INTENT_PATTERNS = {
+  product: [
+    /what\s+(products?|items?)\s+(do|does|can)\s+(you|i)\s+(sell|have|offer|get|buy)/i,
+    /show\s+(me\s+)?(your\s+)?(all\s+)?(products?|items?)/i,
+    /list\s+(of\s+)?(your\s+)?(all\s+)?(products?|items?)/i,
+    /what\s+(products?|items?)\s+(are\s+)?available/i,
+    /do\s+you\s+(sell|have|offer)\s+(any\s+)?(products?|items?)/i,
+    /can\s+i\s+(see|view|browse)\s+(your\s+)?(products?|items?)/i,
+    /what\s+(do|can)\s+(you|i)\s+(sell|buy|purchase|get)/i,
+    /browse\s+(your\s+)?(products?|items?|catalog)/i,
+  ],
+  service: [
+    /what\s+services?\s+(do|does|can)\s+(you|i)\s+(provide|offer|have|get)/i,
+    /show\s+(me\s+)?(your\s+)?(all\s+)?services?/i,
+    /list\s+(of\s+)?(your\s+)?(all\s+)?services?/i,
+    /what\s+services?\s+(are\s+)?available/i,
+    /do\s+you\s+(provide|have|offer)\s+(any\s+)?services?/i,
+    /can\s+i\s+(see|view|browse)\s+(your\s+)?services?/i,
+    /browse\s+(your\s+)?services?/i,
+  ],
+  policy: [
+    /what\s+(is|are)\s+(your\s+)?(policies|policy)/i,
+    /show\s+(me\s+)?(your\s+)?(all\s+)?(policies|policy)/i,
+    /list\s+(of\s+)?(your\s+)?(all\s+)?(policies|policy)/i,
+    /do\s+you\s+have\s+(any\s+)?(policies|policy)/i,
+    /can\s+i\s+(see|view|read)\s+(your\s+)?(policies|policy)/i,
+    /what\s+(are|is)\s+(the\s+)?(return|refund|shipping|privacy|terms)\s+(policy|policies)/i,
+  ],
+  faq: [
+    /what\s+(are|is)\s+(your\s+)?(frequently\s+asked\s+questions?|faqs?)/i,
+    /show\s+(me\s+)?(your\s+)?(all\s+)?(frequently\s+asked\s+questions?|faqs?)/i,
+    /list\s+(of\s+)?(your\s+)?(frequently\s+asked\s+questions?|faqs?)/i,
+    /do\s+you\s+have\s+(any\s+)?(frequently\s+asked\s+questions?|faqs?)/i,
+    /can\s+i\s+(see|view)\s+(your\s+)?(frequently\s+asked\s+questions?|faqs?)/i,
+    /common\s+questions?/i,
+  ],
+};
+
+/**
+ * Detect if query is asking for a listing of a specific collection type
+ * @param {string} query - User query
+ * @param {string} collectionType - Type of collection to check
+ * @returns {boolean} - True if query matches listing intent
+ */
+const detectListingIntent = (query, collectionType) => {
+  if (!query || !collectionType) return false;
+
+  const patterns = LISTING_INTENT_PATTERNS[collectionType];
+  if (!patterns) return false;
+
+  return patterns.some((pattern) => pattern.test(query));
+};
+
+/**
  * Common stop words to remove from search queries
  */
 const STOP_WORDS = new Set([
@@ -113,6 +170,28 @@ const buildTextSearchQuery = (
   options = {}
 ) => {
   const { maxResults = 8 } = options;
+
+  // Check for listing intent BEFORE cleaning the query
+  // This preserves context like "what products do you sell"
+  const isListingQuery = detectListingIntent(query, collectionType);
+
+  if (isListingQuery) {
+    console.log(`🎯 Listing intent detected for ${collectionType}: "${query}"`);
+
+    // Return ALL items from this collection type
+    const baseFilter = { businessId };
+    const collectionsWithIsActive = ["faq", "product", "service", "policy"];
+    if (collectionsWithIsActive.includes(collectionType)) {
+      baseFilter.isActive = true;
+    }
+
+    return {
+      filter: baseFilter,
+      sort: { createdAt: -1 },
+      limit: 20, // Higher limit for listing queries
+      isListingQuery: true, // Flag for logging purposes
+    };
+  }
 
   // Clean the query first to remove stop words
   const cleanedQuery = cleanQuery(query);
@@ -298,4 +377,5 @@ module.exports = {
   buildTextSearchQuery,
   searchMultipleCollections,
   calculateRelevanceScore,
+  detectListingIntent,
 };
