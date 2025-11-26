@@ -83,7 +83,18 @@ const checkEscalationNeeded = async (query, model, sessionData = {}) => {
     `;
 
     const result = await analysisChat.sendMessage({ message: prompt });
-    const analysis = JSON.parse(result.text);
+
+    // Clean the response - remove markdown code blocks if present
+    let cleanedText = result.text.trim();
+    if (cleanedText.startsWith("```json")) {
+      cleanedText = cleanedText
+        .replace(/^```json\n?/, "")
+        .replace(/\n?```$/, "");
+    } else if (cleanedText.startsWith("```")) {
+      cleanedText = cleanedText.replace(/^```\n?/, "").replace(/\n?```$/, "");
+    }
+
+    const analysis = JSON.parse(cleanedText);
 
     // Take the higher of the two scores to be safe
     const finalScore = Math.max(keywordScore, analysis.score);
