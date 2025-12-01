@@ -210,10 +210,37 @@ const generateNewBackupCodes = async (req, res) => {
   }
 };
 
+// Verify backup code
+const verifyBackupCode = async (userId, code) => {
+  try {
+    const user = await User.findById(userId).select("backupCodes");
+    if (!user || !user.backupCodes || user.backupCodes.length === 0) {
+      return false;
+    }
+
+    // Find matching unused backup code
+    for (const backupCode of user.backupCodes) {
+      if (!backupCode.used && bcrypt.compareSync(code, backupCode.code)) {
+        // Mark as used
+        backupCode.used = true;
+        backupCode.usedAt = new Date();
+        await user.save();
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Backup code verification error:", error);
+    return false;
+  }
+};
+
 module.exports = {
   toggleOtp,
   sendSettingsOtp,
   getOtpStatus,
   generateNewBackupCodes,
   verifyOtp, // Export for use in other modules
+  verifyBackupCode, // Export for backup code verification
 };

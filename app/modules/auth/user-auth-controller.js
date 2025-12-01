@@ -369,12 +369,24 @@ const verifyLoginOtp = async (req, res) => {
       return res.status(400).json({ error: "Invalid credentials" });
     }
 
-    // Verify OTP
-    const { verifyOtp } = require("../user/otp-controller");
-    const isOtpValid = await verifyOtp(user._id, otpCode, "login");
+    // Verify OTP or backup code
+    const { verifyOtp, verifyBackupCode } = require("../user/otp-controller");
+    let isOtpValid = await verifyOtp(user._id, otpCode, "login");
+    let usedBackupCode = false;
+
+    // If OTP is invalid, try backup code
+    if (!isOtpValid) {
+      const isBackupCodeValid = await verifyBackupCode(user._id, otpCode);
+      if (isBackupCodeValid) {
+        isOtpValid = true;
+        usedBackupCode = true;
+      }
+    }
 
     if (!isOtpValid) {
-      return res.status(400).json({ error: "Invalid or expired OTP code" });
+      return res
+        .status(400)
+        .json({ error: "Invalid or expired OTP code or backup code" });
     }
 
     // Update last OTP used
