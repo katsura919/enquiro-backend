@@ -408,7 +408,7 @@ Keep it brief and professional.`;
         config: {
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 200,
+            maxOutputTokens: 500,
           },
         },
       });

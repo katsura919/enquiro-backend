@@ -176,7 +176,7 @@ const buildTextSearchQuery = (
   collectionType,
   options = {}
 ) => {
-  const { maxResults = 2 } = options;
+  const { maxResults = 5 } = options;
 
   // Check for listing intent BEFORE cleaning the query
   // This preserves context like "what products do you sell"
@@ -195,7 +195,7 @@ const buildTextSearchQuery = (
     return {
       filter: baseFilter,
       sort: { createdAt: -1 },
-      limit: 2, // Limit per collection to avoid overwhelming AI model
+      limit: 5, // Limit per collection to avoid overwhelming AI model
       isListingQuery: true, // Flag for logging purposes
     };
   }
@@ -315,9 +315,9 @@ const searchMultipleCollections = async (businessId, query, collections) => {
   // Check if ANY result is from a listing query
   const hasListingIntent = flatResults.some((r) => r.isListingQuery);
 
-  // For listing queries, return up to 8 combined (2 per collection x 4)
+  // For listing queries, return up to 20 combined (5 per collection x 4)
   // For specific searches, limit to 8 most relevant
-  const resultLimit = hasListingIntent ? 8 : 8;
+  const resultLimit = hasListingIntent ? 20 : 8;
 
   return flatResults
     .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
