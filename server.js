@@ -19,7 +19,7 @@ const startServer = async () => {
     await connectDB();
 
     // Global rate limiter for all API endpoints
-    app.use("/api", rateLimiters.api);
+    // app.use("/api", rateLimiters.api);
 
     app.use("/api", api);
 
